@@ -1,0 +1,2 @@
+source /home/nucita/personal/hexapod_idf/build/bootloader/gdbinit/symbols
+source /home/nucita/personal/hexapod_idf/build/bootloader/gdbinit/connect

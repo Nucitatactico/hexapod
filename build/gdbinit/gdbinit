@@ -1,0 +1,2 @@
+source /home/nucita/personal/hexapod_idf/build/gdbinit/symbols
+source /home/nucita/personal/hexapod_idf/build/gdbinit/connect

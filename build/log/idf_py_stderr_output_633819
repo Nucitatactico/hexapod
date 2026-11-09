@@ -1,0 +1,7 @@
+--- esp-idf-monitor 1.10.0 on /dev/ttyACM0 115200
+--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+--- 0x4ff0562a: mspi_timing_ll_set_delayline at /home/nucita/esp/esp-idf/components/hal/esp32p4/include/hal/mspi_timing_tuning_ll.h:158(inlined by) mspi_timing_config_psram_set_tuning_delayline at /home/nucita/esp/esp-idf/components/esp_hw_support/mspi_timing_by_dqs.c:173
+--- 0x4fc058e0: wdt_hal_config_stage in ROM
+--- ERROR: device reports readiness to read but returned no data (device disconnected or multiple access on port?)
+--- Waiting for the device to reconnect....................................................................................
+

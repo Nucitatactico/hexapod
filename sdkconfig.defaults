@@ -1,0 +1,32 @@
+# ───────── Flash ─────────
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+
+# ───────── Partition table ─────────
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ───────── PSRAM (imprescindible para el modelo SR) ─────────
+# Ajusta según tu chip: S3 → OCT, P4 → OCT
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# ───────── FreeRTOS ─────────
+CONFIG_FREERTOS_HZ=1000
+
+# ───────── ESP-SR ─────────
+CONFIG_ESP_SR_ENABLED=y
+CONFIG_MODEL_IN_FLASH=y
+CONFIG_SR_MN_EN=y
+CONFIG_SR_MN_EN_MULTINET7=y
+CONFIG_SR_MN_LANGUAGE_EN=y
+# Desactiva la wake word china
+# CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS is not set
+
+# Activa la wake word en inglés "Hi ESP"
+CONFIG_SR_WN_WN9_HIESP=y
+
+# ───────── Logs ─────────
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
