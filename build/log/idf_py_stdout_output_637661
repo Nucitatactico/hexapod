@@ -1,0 +1,18 @@
+[1/10] Performing build step for 'bootloader'
+[1/1] cd /home/nucita/personal/hexapod_idf/build/bootloader/esp-idf/esptool_py && /home/nucita/.espressif/python_env/idf5.4_py3.13_env/bin/python /home/nucita/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x2000 /home/nucita/personal/hexapod_idf/build/bootloader/bootloader.bin
+Bootloader binary size 0x5940 bytes. 0x6c0 bytes (7%) free.
+[2/10] No install step for 'bootloader'
+[3/10] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/motion.c.obj
+[4/10] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/voice.c.obj
+[5/10] Completed 'bootloader'
+[6/10] Linking C static library esp-idf/main/libmain.a
+[7/10] Generating ld/sections.ld
+[8/10] Linking CXX executable hexapod_idf.elf
+[9/10] Generating binary image from built executable
+esptool.py v4.13.0
+Creating esp32p4 image...
+Merged 3 ELF sections
+Successfully created esp32p4 image.
+Generated /home/nucita/personal/hexapod_idf/build/hexapod_idf.bin
+[10/10] cd /home/nucita/personal/hexapod_idf/build/esp-idf/esptool_py && /home/nucita/.espressif/python_env/idf5.4_py3.13_env/bin/python /home/nucita/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/nucita/personal/hexapod_idf/build/partition_table/partition-table.bin /home/nucita/personal/hexapod_idf/build/hexapod_idf.bin
+hexapod_idf.bin binary size 0x19db40 bytes. Smallest app partition is 0x300000 bytes. 0x1624c0 bytes (46%) free.

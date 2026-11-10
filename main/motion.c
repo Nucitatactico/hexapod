@@ -1,5 +1,5 @@
 #include "motion.h"
-#include "hardware.h"          // ← ESTE FALTABA o estaba después
+#include "hardware.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,7 +11,6 @@
 
 static const char *TAG = "MOTION";
 
-// ─── Estado global ───
 bool robot_encendido              = false;
 bool modo_automatico              = false;
 bool modo_calibracion             = false;
@@ -28,33 +27,66 @@ void set_accion(const char *texto) {
 }
 const char *get_accion(void) { return accion_actual; }
 
+// ─── Radar con histéresis (disponible, pero NO usado todavía) ───
+// Cuando aísles el sensor y decidas reactivar la evasión, esta función
+// ya está lista. Por ahora se queda sin uso.
+#define RADAR_ON_MS   400
+#define RADAR_OFF_MS  600
+
+static bool     radar_estado = false;
+static TickType_t radar_cambio_ts = 0;
+
+bool radar_obstaculo(void) {
+    if (!radar_fisicamente_encendido) {
+        radar_estado = false;
+        return false;
+    }
+
+    bool raw = gpio_get_level(PIN_RADAR);
+    TickType_t ahora = xTaskGetTickCount();
+    uint32_t delta_ms = (ahora - radar_cambio_ts) * portTICK_PERIOD_MS;
+
+    if (!radar_estado && raw) {
+        if (delta_ms >= RADAR_ON_MS) {
+            radar_estado = true;
+            radar_cambio_ts = ahora;
+            ESP_LOGI(TAG, "Radar: obstáculo CONFIRMADO");
+        }
+    } else if (radar_estado && !raw) {
+        if (delta_ms >= RADAR_OFF_MS) {
+            radar_estado = false;
+            radar_cambio_ts = ahora;
+            ESP_LOGI(TAG, "Radar: obstáculo LIBERADO");
+        }
+    } else {
+        radar_cambio_ts = ahora;
+    }
+
+    return radar_estado;
+}
+
 // ─── Estado de marcha ───
 static int fase_marcha = 0;
 static unsigned long tiempo_paso = 0;
 static int direccion_anterior = 0;
 
-// ─── Marcha de 6 fases ───
+// ─── Marcha de 6 fases (versión original que ya funcionaba) ───
 static void caminar(int direccion) {
-    if ((direccion == 1 || direccion == 2) &&
-        radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-        return;
-    }
     unsigned long ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (ahora - tiempo_paso < (unsigned long)velocidad_caminata) return;
     tiempo_paso = ahora;
 
-    if (direccion == 1) { // ADELANTE
-        set_accion("MOV: ADELANTE");
+    if (direccion == 1) {
+        set_accion("MOV: ATRAS (real)");
         if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
-        // ^^^ usa el estado actual de las coxas en las fases 0/3
         else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
         else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
         else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
         else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
         else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
     }
-    else if (direccion == 2) { // ATRAS
-        set_accion("MOV: ATRAS");
+    else if (direccion == 2) {
+        set_accion("MOV: ADELANTE (real)");
         if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
         else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
         else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
@@ -62,8 +94,8 @@ static void caminar(int direccion) {
         else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
         else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
     }
-    else if (direccion == 4) { // GIRO DERECHA
-        set_accion("GIRO: DERECHA");
+    else if (direccion == 4) {
+        set_accion("GIRO: IZQUIERDA (real)");
         if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
         else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
         else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
@@ -71,8 +103,8 @@ static void caminar(int direccion) {
         else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
         else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
     }
-    else if (direccion == 5) { // GIRO IZQUIERDA
-        set_accion("GIRO: IZQUIERDA");
+    else if (direccion == 5) {
+        set_accion("GIRO: DERECHA (real)");
         if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
         else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); }
         else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE);
@@ -84,18 +116,18 @@ static void caminar(int direccion) {
     fase_marcha = (fase_marcha + 1) % 6;
 }
 
-// ─── Transición postura (equivalente a transicionPostura de Arduino) ───
+// ─── Transición postura lenta ───
 void transicion_postura(bool levantar) {
     en_transicion = true;
     set_accion(levantar ? "LEVANTANDO..." : "APAGANDO...");
 
     int inicial = levantar ? FEMUR_ACOSTADO : FEMUR_APOYO;
     int final_  = levantar ? FEMUR_APOYO    : FEMUR_ACOSTADO;
-    int inc     = (final_ > inicial) ? 10 : -10;
+    int inc     = (final_ > inicial) ? 5 : -5;
     int actual  = inicial;
 
     mover_todas_caderas_centro();
-    vTaskDelay(pdMS_TO_TICKS(150));
+    vTaskDelay(pdMS_TO_TICKS(200));
 
     while (actual != final_) {
         actual += inc;
@@ -107,7 +139,7 @@ void transicion_postura(bool levantar) {
         mover_servo_inmediato(D_DER_F, actual);
         mover_servo_inmediato(M_DER_F, actual);
         mover_servo_inmediato(P_DER_F, actual);
-        vTaskDelay(pdMS_TO_TICKS(60));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     robot_encendido = levantar;
@@ -115,7 +147,7 @@ void transicion_postura(bool levantar) {
     en_transicion = false;
 }
 
-// ─── Flexiones (push-ups del Rust) ───
+// ─── Flexiones ───
 void flexiones(void) {
     en_transicion = true;
     set_accion("FLEXIONES");
@@ -135,7 +167,7 @@ void flexiones(void) {
     en_transicion = false;
 }
 
-// ─── Tarea principal de movimiento ───
+// ─── Tarea principal SIN evasión ───
 void motion_task(void *pvParameters) {
     while (1) {
         if (!en_transicion) {
@@ -143,29 +175,8 @@ void motion_task(void *pvParameters) {
         }
 
         if (robot_encendido && !en_transicion) {
-            bool hay_obstaculo = radar_fisicamente_encendido && gpio_get_level(PIN_RADAR);
-
-            if (modo_automatico) {
-                direccion_actual = hay_obstaculo ? 4 : 1;
-            } else if (!modo_calibracion) {
-                if (hay_obstaculo && (direccion_actual == 1 || direccion_actual == 2)) {
-                    direccion_actual = 0;
-                    set_accion("FRENO X OBSTACULO");
-                    mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
-                    mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
-                    fase_marcha = 0;
-                }
-            }
-
             if (!modo_calibracion) {
-                // Embrague lógico al cambiar de dirección
                 if (direccion_actual != direccion_anterior) {
-                    if (direccion_actual != 0 && direccion_anterior != 0) {
-                        mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
-                        mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
-                        set_accion("CENTRANDO P/ GIRAR");
-                        vTaskDelay(pdMS_TO_TICKS(500));
-                    }
                     fase_marcha = 0;
                     direccion_anterior = direccion_actual;
                 }
@@ -176,9 +187,7 @@ void motion_task(void *pvParameters) {
                     mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
                     mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
                     fase_marcha = 0;
-                    if (strcmp(accion_actual, "FRENO X OBSTACULO") != 0) {
-                        set_accion("ESTATICO");
-                    }
+                    set_accion("ESTATICO");
                 }
             } else {
                 set_accion("MODO SERVOS");

@@ -104,16 +104,28 @@ void mover_tripode_b(int femur, int coxa_izq, int coxa_der) {
 }
 
 esp_err_t hardware_init(void) {
-    gpio_config_t io_cfg = {
-        .pin_bit_mask = (1ULL << PIN_RADAR) | (1ULL << PIN_CDS),
-        .mode         = GPIO_MODE_INPUT_OUTPUT,
+    // Radar: solo INPUT (la resistencia pull-down externa ya está en el módulo)
+    gpio_config_t radar_cfg = {
+        .pin_bit_mask = (1ULL << PIN_RADAR),
+        .mode         = GPIO_MODE_INPUT,
         .pull_up_en   = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type    = GPIO_INTR_DISABLE,
     };
-    gpio_config(&io_cfg);
+    gpio_config(&radar_cfg);
+
+    // CDS: solo OUTPUT (alimenta el radar)
+    gpio_config_t cds_cfg = {
+        .pin_bit_mask = (1ULL << PIN_CDS),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cds_cfg);
     gpio_set_level(PIN_CDS, 1);
 
+    // I2C para PCA9685
     i2c_master_bus_config_t bus_cfg = {
         .clk_source        = I2C_CLK_SRC_DEFAULT,
         .i2c_port          = I2C_NUM_0,
@@ -139,6 +151,6 @@ esp_err_t hardware_init(void) {
         mover_servo_inmediato(i, a);
     }
 
-    ESP_LOGI(TAG, "Hardware listo (PCA9685 en 0x40, I2C 7/8)");
+    ESP_LOGI(TAG, "Hardware listo (PCA9685 en 0x40, I2C 7/8, radar en GPIO5)");
     return ESP_OK;
 }

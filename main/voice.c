@@ -35,6 +35,10 @@ static int ultimo_id = -1;
 static TickType_t tiempo_ultimo_id = 0;
 #define DEBOUNCE_MS 800
 
+// ─────────────────────────────────────────────────────────────
+// Mapeo de comandos de voz (con direcciones corregidas por el
+// montaje físico invertido del robot)
+// ─────────────────────────────────────────────────────────────
 static void aplicar_comando_voz(int id) {
     TickType_t ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (id == ultimo_id && (ahora - tiempo_ultimo_id) < DEBOUNCE_MS) return;
@@ -44,39 +48,40 @@ static void aplicar_comando_voz(int id) {
     ESP_LOGI(TAG, "Comando de voz detectado: id=%d", id);
 
     switch (id) {
-        case 0: // "walk forward"
+        case 0: // "go" → físicamente adelante (usa direccion 2)
             if (!modo_automatico && robot_encendido && !modo_calibracion) {
-                if (radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-                    direccion_actual = 0;
-                    set_accion("FRENO X OBSTACULO");
-                } else {
-                    direccion_actual = 1;
-                }
+                direccion_actual = 2;
+                ESP_LOGI(TAG, "Comando go aceptado (adelante)");
             }
             break;
-        case 1: // "walk backward"
+
+        case 1: // "back" → físicamente atrás (usa direccion 1)
             if (!modo_automatico && robot_encendido && !modo_calibracion) {
-                if (radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-                    direccion_actual = 0;
-                    set_accion("FRENO X OBSTACULO");
-                } else {
-                    direccion_actual = 2;
-                }
+                direccion_actual = 1;
+                ESP_LOGI(TAG, "Comando back aceptado (atrás)");
             }
             break;
-        case 2: // "move right"
-            if (!modo_automatico && robot_encendido && !modo_calibracion)
+
+        case 2: // "left" → físicamente gira izquierda (usa direccion 4)
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
                 direccion_actual = 4;
+                ESP_LOGI(TAG, "Comando left aceptado (giro izquierda)");
+            }
             break;
-        case 3: // "move left"
-            if (!modo_automatico && robot_encendido && !modo_calibracion)
+
+        case 3: // "right" → físicamente gira derecha (usa direccion 5)
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
                 direccion_actual = 5;
+                ESP_LOGI(TAG, "Comando right aceptado (giro derecha)");
+            }
             break;
-        case 4: // "do push ups"
+
+        case 4: // "jump"
             if (robot_encendido && !modo_automatico && !modo_calibracion)
                 flexiones();
             break;
-        case 5: // "toggle power"
+
+        case 5: // "power"
             transicion_postura(!robot_encendido);
             if (!robot_encendido) {
                 direccion_actual = 0;
@@ -86,6 +91,9 @@ static void aplicar_comando_voz(int id) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Inicialización de ESP-SR + micrófono PDM
+// ─────────────────────────────────────────────────────────────
 esp_err_t voice_init(void) {
     // 1. Modelos desde la partición
     srmodel_list_t *models = esp_srmodel_init("model");
@@ -135,12 +143,12 @@ esp_err_t voice_init(void) {
 
     // 4. Comandos
     esp_mn_commands_clear();
-    esp_mn_commands_add(0, "walk forward");
-    esp_mn_commands_add(1, "walk backward");
-    esp_mn_commands_add(2, "move right");
-    esp_mn_commands_add(3, "move left");
-    esp_mn_commands_add(4, "do push ups");
-    esp_mn_commands_add(5, "toggle power");
+    esp_mn_commands_add(0, "go");
+    esp_mn_commands_add(1, "back");
+    esp_mn_commands_add(2, "left");
+    esp_mn_commands_add(3, "right");
+    esp_mn_commands_add(4, "jump");
+    esp_mn_commands_add(5, "power");
     esp_mn_commands_update();
 
     // 5. I2S PDM RX (micrófono de la FireBeetle 2)
@@ -183,7 +191,6 @@ void mic_feed_task(void *pvParameters) {
 
     ESP_LOGI(TAG, "mic_feed_task (chunk=%d, bytes=%u)", chunksize, (unsigned)size);
 
-    // Para no inundar el log, imprimimos el peak cada N ciclos
     int contador_peak = 0;
     int peak_max = 0;
 
@@ -195,7 +202,7 @@ void mic_feed_task(void *pvParameters) {
             continue;
         }
 
-        // ── Diagnóstico: calcular peak del buffer de audio ──
+        // Diagnóstico de nivel de audio (1 por segundo)
         int peak = 0;
         int muestras = bytes_read / sizeof(int16_t);
         for (int i = 0; i < muestras; i++) {
@@ -205,7 +212,7 @@ void mic_feed_task(void *pvParameters) {
         }
         if (peak > peak_max) peak_max = peak;
         contador_peak++;
-        if (contador_peak >= 50) {  // ~cada 1 segundo (50 chunks × 20ms)
+        if (contador_peak >= 50) {
             ESP_LOGI(TAG, "audio peak (1s) = %d", peak_max);
             contador_peak = 0;
             peak_max = 0;
@@ -220,7 +227,6 @@ void mic_feed_task(void *pvParameters) {
             continue;
         }
 
-        // ── Diagnóstico: log de wake word ──
         if (res->wakeup_state == WAKENET_DETECTED) {
             ESP_LOGI(TAG, ">>> WAKE WORD DETECTADA <<<");
         }

@@ -1,0 +1,133 @@
+[0;32mI (199) esp_image: segment 1: paddr=000bf8b8 vaddr=30100000 sizeESP-ROM:esp32p4-eco2-20240710[0m
+Build:Jul 10 2024
+rst:0x17 (CHIP_USB_UART_RESET),boot:0x10c (SPI_FAST_FLASH_BOOT)
+Core0 Saved PC:0x4ff2ec0c
+Core1 Saved PC:0x4fc058e0
+SPI mode:DIO, clock div:1
+load:0x4ff33ce0,len:0x1674
+load:0x4ff2abd0,len:0xe90
+load:0x4ff2cbd0,len:0x33dc
+entry 0x4ff2abda
+[0;32mI (28) boot: ESP-IDF v5.4.4-1669-g671b7f4991f-dirty 2nd stage bootloader[0m
+[0;32mI (28) boot: compile time Nov  8 2026 22:07:09[0m
+[0;32mI (29) boot: Multicore bootloader[0m
+[0;32mI (31) boot: chip revision: v1.3[0m
+[0;32mI (33) boot: efuse block revision: v0.3[0m
+[0;32mI (37) boot.esp32p4: SPI Speed      : 80MHz[0m
+[0;32mI (40) boot.esp32p4: SPI Mode       : DIO[0m
+[0;32mI (44) boot.esp32p4: SPI Flash Size : 16MB[0m
+[0;32mI (48) boot: Enabling RNG early entropy source...[0m
+[0;32mI (53) boot: Partition Table:[0m
+[0;32mI (55) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (61) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (68) boot:  1 phy_init         RF data          01 01 0000f000 00001000[0m
+[0;32mI (74) boot:  2 factory          factory app      00 00 00010000 00300000[0m
+[0;32mI (81) boot:  3 model            Unknown data     01 82 00310000 00400000[0m
+[0;32mI (88) boot: End of partition table[0m
+[0;32mI (91) esp_image: segment 0: paddr=00010020 vaddr=400e0020 size=af890h (718992) map[0m
+[0;32mI (199) esp_image: segment 1: paddr=000bf8b8 vaddr=30100000 size=00068h (   104) load[0m
+[0;32mI (201) esp_image: segment 2: paddr=000bf928 vaddr=4ff00000 size=006f0h (  1776) load[0m
+[0;32mI (204) esp_image: segment 3: paddr=000c0020 vaddr=40000020 size=d5678h (874104) map[0m
+[0;32mI (333) esp_image: segment 4: paddr=001956a0 vaddr=4ff006f0 size=128d8h ( 75992) load[0m
+[0;32mI (347) esp_image: segment 5: paddr=001a7f80 vaddr=4ff13000 size=05c18h ( 23576) load[0m
+[0;32mI (356) boot: Loaded app from partition at offset 0x10000[0m
+[0;32mI (357) boot: Disabling RNG early entropy source...[0m
+[0;32mI (369) hex_psram: vendor id    : 0x0d (AP)[0m
+[0;32mI (370) hex_psram: Latency      : 0x01 (Fixed)[0m
+[0;32mI (370) hex_psram: DriveStr.    : 0x00 (25 Ohm)[0m
+[0;32mI (371) hex_psram: dev id       : 0x03 (generation 4)[0m
+[0;32mI (375) hex_psram: density      : 0x07 (256 Mbit)[0m
+[0;32mI (380) hex_psram: good-die     : 0x06 (Pass)[0m
+[0;32mI (384) hex_psram: SRF          : 0x02 (Slow Refresh)[0m
+[0;32mI (388) hex_psram: BurstType    : 0x00 ( Wrap)[0m
+[0;32mI (393) hex_psram: BurstLen     : 0x03 (2048 Byte)[0m
+[0;32mI (397) hex_psram: BitMode      : 0x01 (X16 Mode)[0m
+[0;32mI (402) hex_psram: Readlatency  : 0x04 (14 cycles@Fixed)[0m
+[0;32mI (407) hex_psram: DriveStrength: 0x00 (1/1)[0m
+[0;32mI (411) MSPI DQS: tuning success, best phase id is 0[0m
+[0;32mI (588) MSPI DQS: tuning success, best delayline id is 16[0m
+[0;32mI (589) esp_psram: Found 32MB PSRAM device[0m
+[0;32mI (589) esp_psram: Speed: 200MHz[0m
+[0;32mI (590) hex_psram: psram CS IO is dedicated[0m
+[0;32mI (593) cpu_start: Multicore app[0m
+[0;32mI (1545) esp_psram: SPI SRAM memory test OK[0m
+[0;32mI (1555) cpu_start: GPIO 38 and 37 are used as console UART I/O pins[0m
+[0;32mI (1556) cpu_start: Pro cpu start user code[0m
+[0;32mI (1556) cpu_start: cpu freq: 360000000 Hz[0m
+[0;32mI (1558) app_init: Application information:[0m
+[0;32mI (1562) app_init: Project name:     hexapod_idf[0m
+[0;32mI (1566) app_init: App version:      1[0m
+[0;32mI (1570) app_init: Compile time:     Nov  8 2026 22:06:31[0m
+[0;32mI (1575) app_init: ELF file SHA256:  fd0e96527...[0m
+[0;32mI (1579) app_init: ESP-IDF:          v5.4.4-1669-g671b7f4991f-dirty[0m
+[0;32mI (1585) efuse_init: Min chip rev:     v0.1[0m
+[0;32mI (1589) efuse_init: Max chip rev:     v1.99 [0m
+[0;32mI (1593) efuse_init: Chip rev:         v1.3[0m
+[0;32mI (1597) heap_init: Initializing. RAM available for dynamic allocation:[0m
+[0;32mI (1603) heap_init: At 4FF20640 len 0001A980 (106 KiB): RETENT_RAM[0m
+[0;32mI (1609) heap_init: At 4FF3AFC0 len 00004BF0 (18 KiB): RAM[0m
+[0;32mI (1614) heap_init: At 4FF40000 len 00060000 (384 KiB): RAM[0m
+[0;32mI (1620) heap_init: At 50108080 len 00007F80 (31 KiB): RTCRAM[0m
+[0;32mI (1625) heap_init: At 30100068 len 00001F98 (7 KiB): SPM[0m
+[0;32mI (1631) esp_psram: Adding pool of 32768K of PSRAM memory to heap allocator[0m
+[0;32mI (1638) spi_flash: detected chip: generic[0m
+[0;32mI (1641) spi_flash: flash io: dio[0m
+[0;32mI (1644) sleep_gpio: Configure to isolate all GPIO pins in sleep state[0m
+[0;32mI (1650) sleep_gpio: Enable automatic switching of GPIO sleep configuration[0m
+[0;32mI (1657) main_task: Started on CPU0[0m
+[0;32mI (1660) esp_psram: Reserving pool of 32K of internal memory for DMA/internal allocations[0m
+[0;32mI (1668) main_task: Calling app_main()[0m
+[0;32mI (1677) MAIN: Iniciando Hexapodo (FireBeetle 2 ESP32-P4)...[0m
+[0;32mI (1677) gpio: GPIO[4]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1685) gpio: GPIO[5]| InputEn: 1| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0 [0m
+[0;32mI (1702) HW: Hardware listo (PCA9685 en 0x40, I2C 7/8)[0m
+[0;32mI (1702) MODEL_LOADER: The storage free size is 63936 KB[0m
+[0;32mI (1703) MODEL_LOADER: The partition size is 4096 KB[0m
+[0;32mI (1708) MODEL_LOADER: Successfully load srmodels[0m
+[0;32mI (1712) AFE_CONFIG: Set WakeNet Model: wn9_nihaoxiaozhi_tts[0m
+MC Quantized wakenet9: wakenet9l_tts1h8_你好小智_3_0.631_0.635, tigger:v4, mode:0, p:0
+[0;32mI (1753) AFE: AFE Version: (1MIC_V251128)[0m
+[0;32mI (1753) AFE: Input PCM Config: total 1 channels(1 microphone, 0 playback), sample rate:16000[0m
+[0;32mI (1761) AFE: AFE Pipeline: [input] -> |VAD(WebRTC)| -> |WakeNet(wn9_nihaoxiaozhi_tts,)| -> [output][0m
+[0;32mI (1770) VOICE: Modelo MultiNet: mn7_en[0m
+Build fst from commands.
+Quantized MultiNet7:rnnt_ctc_2.0, name:mn7_en
+Quantized MultiNet7 search method: 2, time out:5.8 s
+Build fst from commands.
+[0;33mW (2244) i2s_common: dma frame num is adjusted to 256 to align the dma buffer with 64, bufsize = 512[0m
+[0;32mI (2246) VOICE: ESP-SR inicializado (micrófono PDM GPIO12/9, mono)[0m
+[0;32mI (2249) VOICE: mic_feed_task (chunk=512, bytes=1024)[0m
+[0;32mI (2253) MAIN: Sistema listo.[0m
+[0;32mI (2256) main_task: Returned from app_main()[0m
+[0;32mI (3846) VOICE: audio peak (1s) = 2894[0m
+[0;32mI (5446) VOICE: audio peak (1s) = 29[0m
+[0;32mI (7046) VOICE: audio peak (1s) = 37[0m
+[0;32mI (8646) VOICE: audio peak (1s) = 46[0m
+[0;32mI (10246) VOICE: audio peak (1s) = 73[0m
+[0;32mI (11846) VOICE: audio peak (1s) = 33[0m
+[0;32mI (13446) VOICE: audio peak (1s) = 30[0m
+[0;32mI (15046) VOICE: audio peak (1s) = 59[0m
+[0;32mI (16646) VOICE: audio peak (1s) = 36[0m
+[0;32mI (18246) VOICE: audio peak (1s) = 28[0m
+[0;32mI (19846) VOICE: audio peak (1s) = 42[0m
+[0;32mI (21446) VOICE: audio peak (1s) = 30[0m
+[0;32mI (23046) VOICE: audio peak (1s) = 30[0m
+[0;32mI (24646) VOICE: audio peak (1s) = 25[0m
+[0;32mI (26246) VOICE: audio peak (1s) = 24[0m
+[0;32mI (27846) VOICE: audio peak (1s) = 28[0m
+[0;32mI (29446) VOICE: audio peak (1s) = 27[0m
+[0;32mI (31046) VOICE: audio peak (1s) = 30[0m
+[0;32mI (32646) VOICE: audio peak (1s) = 24[0m
+[0;32mI (34246) VOICE: audio peak (1s) = 24[0m
+[0;32mI (35846) VOICE: audio peak (1s) = 27[0m
+[0;32mI (37446) VOICE: audio peak (1s) = 29[0m
+[0;32mI (39046) VOICE: audio peak (1s) = 28[0m
+[0;32mI (40646) VOICE: audio peak (1s) = 35[0m
+[0;32mI (42246) VOICE: audio peak (1s) = 31[0m
+[0;32mI (43846) VOICE: audio peak (1s) = 36[0m
+[0;32mI (45446) VOICE: audio peak (1s) = 34[0m
+[0;32mI (47046) VOICE: audio peak (1s) = 29[0m
+[0;32mI (48646) VOICE: audio peak (1s) = 33[0m
+[0;32mI (50246) VOICE: audio peak (1s) = 32[0m
+[0;32mI (51846) VOICE: audio peak (1s) = 26[0m
+[0;32mI (53446) VOICE: audio peak (1s) = 25[0m
