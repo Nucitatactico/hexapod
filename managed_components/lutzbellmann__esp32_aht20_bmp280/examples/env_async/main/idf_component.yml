@@ -1,0 +1,3 @@
+dependencies:
+  lutzbellmann/esp32_aht20_bmp280:
+    version: '*'

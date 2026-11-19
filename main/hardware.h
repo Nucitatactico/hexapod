@@ -2,16 +2,24 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "driver/i2c_master.h"   // ← necesario para el tipo i2c_master_bus_handle_t
 
 // ─── Pines ───
 #define PIN_SDA    7
 #define PIN_SCL    8
-#define PIN_RADAR  5
-#define PIN_CDS    4
+#define PIN_TRIG   4   // HC-SR04 Trigger
+#define PIN_ECHO   5   // HC-SR04 Echo
+#define PIN_CDS    4   // (legado, no se usa)
 #define PIN_SCK    28
 #define PIN_MOSI   29
 #define PIN_CS     32
 #define PIN_RST    33
+
+// ─── LCD ST7920 (SPI por software) ───
+#define PIN_LCD_CLK   PIN_SCK    // 28
+#define PIN_LCD_DATA  PIN_MOSI   // 29
+#define PIN_LCD_CS    PIN_CS     // 32
+#define PIN_LCD_RST   PIN_RST    // 33
 
 // ─── Índices de servos en el PCA9685 ───
 #define D_IZQ_C  0
@@ -42,7 +50,7 @@
 #define FEMUR_ACOSTADO         150
 #define FEMUR_LEVANTADO        130
 #define FEMUR_APOYO             45
-
+i2c_master_bus_handle_t hardware_get_i2c_bus(void);
 // ─── Funciones ───
 esp_err_t hardware_init(void);
 int  angulo_a_pulsos(int angulo);
@@ -52,3 +60,6 @@ void procesar_movimiento_suave(void);
 void mover_todas_caderas_centro(void);
 void mover_tripode_a(int femur, int coxa_izq, int coxa_der);
 void mover_tripode_b(int femur, int coxa_izq, int coxa_der);
+
+// ─── NUEVO: acceso al bus I2C compartido ───
+i2c_master_bus_handle_t hardware_get_i2c_bus(void);

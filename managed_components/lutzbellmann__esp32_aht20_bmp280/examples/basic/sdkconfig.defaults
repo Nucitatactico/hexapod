@@ -1,0 +1,3 @@
+# AHT20+BMP280 Sensor configuration
+#
+CONFIG_POWER_IS_GPIO=n

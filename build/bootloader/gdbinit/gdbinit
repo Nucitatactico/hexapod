@@ -1,2 +1,2 @@
-source /home/nucita/personal/hexapod_idf/build/bootloader/gdbinit/symbols
-source /home/nucita/personal/hexapod_idf/build/bootloader/gdbinit/connect
+source /home/optiserver/hexapod/build/bootloader/gdbinit/symbols
+source /home/optiserver/hexapod/build/bootloader/gdbinit/connect

@@ -1,0 +1,45 @@
+menu "AHT20+BMP280 Sensor configuration"
+
+    config POWER_IS_GPIO
+        bool "Connect Vdd pin to GPIO"
+        default n
+        help
+            Select this when the Vdd pin is connected to a GPIO
+    
+    config POWER_GPIO_PIN
+        int "The GPIO number of the pin connected to Vdd"
+        depends on POWER_IS_GPIO
+        default 2
+        range 0 36
+        help
+            Select the GPIO pin number for POWER pin when POWER_IS_GPIO is selected.    
+
+    config I2C_SDA_PIN
+        int "The number of I2C SDA pin"
+        default 4
+        range 0 36
+
+    config I2C_SCL_PIN
+        int "The number of I2C SCL pin"
+        default 5
+        range 0 36
+    
+    config I2C_BUS
+        int "The number of I2C bus"
+        default 0
+        range 0 1
+
+    choice "BMP280_I2C_ADDRESS"
+        prompt "Select BMP280 I2C address"
+        help
+            Select the I2C address of BMP280 sensor. The default address is HIGH(0x77), and it can be changed to LOW(0x76).
+        
+        config BMP280_I2C_ADDRESS_0x77
+            bool "HIGH"
+        config BMP280_I2C_ADDRESS_0x76
+            bool "LOW"
+        
+
+    endchoice
+ 
+endmenu

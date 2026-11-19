@@ -2,9 +2,6 @@
 #if DL_COMPILE_ALL || defined(DL_OP_Add)
 #include "dl_module_add.hpp"
 #endif
-#if DL_COMPILE_ALL || defined(DL_OP_Attention)
-#include "dl_module_attention.hpp"
-#endif
 #if DL_COMPILE_ALL || defined(DL_OP_AveragePool)
 #include "dl_module_average_pool.hpp"
 #endif
@@ -70,9 +67,6 @@
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_InsertZeros)
 #include "dl_module_insert_zeros.hpp"
-#endif
-#if DL_COMPILE_ALL || defined(DL_OP_InverseSigmoid)
-#include "dl_module_inverse_sigmoid.hpp"
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_LSTM)
 #include "dl_module_lstm.hpp"
@@ -176,9 +170,6 @@
 #if DL_COMPILE_ALL || defined(DL_OP_ReverseSequence)
 #include "dl_module_reverse_sequence.hpp"
 #endif
-#if DL_COMPILE_ALL || defined(DL_OP_RotaryEmbedding)
-#include "dl_module_rotary_embedding.hpp"
-#endif
 #if DL_COMPILE_ALL || defined(DL_OP_ScatterND)
 #include "dl_module_scatter_nd.hpp"
 #endif
@@ -214,9 +205,6 @@
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_Tanh)
 #include "dl_module_tanh.hpp"
-#endif
-#if DL_COMPILE_ALL || defined(DL_OP_TopK)
-#include "dl_module_top_k.hpp"
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_Transpose)
 #include "dl_module_transpose.hpp"

@@ -2,34 +2,34 @@
 	"sources" : 
 	[
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/CMakeFiles/bootloader"
+			"file" : "/home/optiserver/hexapod/build/CMakeFiles/bootloader"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/CMakeFiles/bootloader.rule"
+			"file" : "/home/optiserver/hexapod/build/CMakeFiles/bootloader.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/CMakeFiles/bootloader-complete.rule"
+			"file" : "/home/optiserver/hexapod/build/CMakeFiles/bootloader-complete.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule"
 		},
 		{
-			"file" : "/home/nucita/personal/hexapod_idf/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
+			"file" : "/home/optiserver/hexapod/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule"
 		}
 	],
 	"target" : 

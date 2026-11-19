@@ -1,0 +1,152 @@
+#include "cam_link.h"
+#include "motion.h"
+#include "hardware.h"
+
+#include "driver/uart.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+static const char *TAG = "CAM_LINK";
+
+#define CAM_UART       UART_NUM_1
+#define CAM_UART_TX    37
+#define CAM_UART_RX    38
+#define CAM_UART_BAUD  115200
+#define CAM_TIMEOUT_MS 600   // sin mensajes -> parar si la cámara estaba al mando
+
+static bool cam_activo = false;          // la cámara es quien movió el robot
+static TickType_t ultimo_msg = 0;
+
+esp_err_t cam_link_init(void) {
+    uart_config_t cfg = {
+        .baud_rate  = CAM_UART_BAUD,
+        .data_bits  = UART_DATA_8_BITS,
+        .parity     = UART_PARITY_DISABLE,
+        .stop_bits  = UART_STOP_BITS_1,
+        .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    ESP_ERROR_CHECK(uart_driver_install(CAM_UART, 256, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(CAM_UART, &cfg));
+    ESP_ERROR_CHECK(uart_set_pin(CAM_UART, CAM_UART_TX, CAM_UART_RX,
+                                 UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_LOGI(TAG, "UART camara lista (TX=%d RX=%d)", CAM_UART_TX, CAM_UART_RX);
+    return ESP_OK;
+}
+
+static bool puede_mover(void) {
+    return robot_encendido && !modo_automatico && !modo_calibracion && !en_transicion;
+}
+
+static void aplicar_comando_cam(char c) {
+    switch (c) {
+        case 'G': if (puede_mover()) { direccion_actual = 2; cam_activo = true; } break;
+        case 'B': if (puede_mover()) { direccion_actual = 1; cam_activo = true; } break;
+        case 'L': if (puede_mover()) { direccion_actual = 4; cam_activo = true; } break;
+        case 'R': if (puede_mover()) { direccion_actual = 5; cam_activo = true; } break;
+        case 'S':
+            if (cam_activo) { direccion_actual = 0; cam_activo = false; }
+            break;
+        case 'J': if (puede_mover()) flexiones(); break;
+        case 'P':
+            if (!en_transicion) {
+                transicion_postura(!robot_encendido);
+                if (!robot_encendido) { direccion_actual = 0; modo_calibracion = false; }
+            }
+            break;
+        default: break;
+    }
+}
+
+void cam_link_task(void *pvParameters) {
+    uint8_t b;
+    int estado = 0;
+    char cmd = 0;
+    ultimo_msg = xTaskGetTickCount();
+
+    while (1) {
+        int n = uart_read_bytes(CAM_UART, &b, 1, pdMS_TO_TICKS(50));
+        if (n == 1) {
+            ESP_LOGI(TAG, "RX Byte: 0x%02X ('%c')", b, b);
+
+            switch (estado) {
+                case 0:
+                    if (b == '$') {
+                        estado = 1;
+                    }
+                    break;
+                case 1:
+                    // Aceptamos cualquier letra mayúscula válida como comando
+                    if (b == 'G' || b == 'B' || b == 'L' || b == 'R' || b == 'S' || b == 'J' || b == 'P') {
+                        cmd = (char)b;
+                        estado = 2;
+                    } else {
+                        estado = 0; // Si no es un comando válido, reiniciamos
+                    }
+                    break;
+                case 2:
+                    if (b == '\n' || b == '\r') {
+                        ultimo_msg = xTaskGetTickCount();
+                        ESP_LOGI(TAG, "Comando valido ejecutado: %c", cmd);
+                        aplicar_comando_cam(cmd);
+                    }
+                    estado = 0; // Volvemos a buscar '$'
+                    break;
+            }
+        }
+
+        // Watchdog: si la S3 deja de enviar, parar
+        if (cam_activo &&
+            (xTaskGetTickCount() - ultimo_msg) > pdMS_TO_TICKS(CAM_TIMEOUT_MS)) {
+            direccion_actual = 0;
+            cam_activo = false;
+            ESP_LOGW(TAG, "Timeout de camara, deteniendo");
+        }
+    }
+}
+#pragma once
+#include "esp_err.h"
+
+esp_err_t cam_link_init(void);
+void cam_link_task(void *pvParameters);
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "hardware.h"
+#include "cam_link.h"
+#include "motion.h"
+#include "voice.h"
+#include "pantalla.h"
+
+static const char *TAG = "MAIN";
+
+void app_main(void)
+{
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_LOGI(TAG, "Iniciando Hexapodo (FireBeetle 2 ESP32-P4)...");
+
+    ESP_ERROR_CHECK(hardware_init());
+
+    if (voice_init() == ESP_OK) {
+        xTaskCreatePinnedToCore(mic_feed_task, "mic_feed", 8192, NULL, 3, NULL, 0);
+    } else {
+        ESP_LOGE(TAG, "Voz no disponible.");
+    }
+    cam_link_init();
+xTaskCreate(cam_link_task, "cam_link", 4096, NULL, 5, NULL);
+
+    xTaskCreatePinnedToCore(motion_task, "motion", 4096, NULL, 5, NULL, 0);
+
+    pantalla_iniciar();
+
+    ESP_LOGI(TAG, "Sistema listo.");
+}

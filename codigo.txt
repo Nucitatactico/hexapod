@@ -1,3 +1,37 @@
+.
+├── CMakeLists.txt
+├── codigo.txt
+├── dependencies.lock
+├── main
+│   ├── CMakeLists.txt
+│   ├── hardware.c
+│   ├── hardware.h
+│   ├── idf_component.yml
+│   ├── main.c
+│   ├── motion.c
+│   ├── motion.h
+│   ├── pantalla.c
+│   ├── pantalla.h
+│   ├── voice.c
+│   └── voice.h
+├── partitions.csv
+├── sdkconfig
+└── sdkconfig.defaults
+
+2 directories, 17 files
+total 120
+drwxr-xr-x  6 optiserver optiserver  4096 Nov 11 11:07 .
+drwx------ 41 optiserver optiserver  4096 Nov 11 11:44 ..
+drwxr-xr-x 11 optiserver optiserver  4096 Nov 11 11:06 build
+-rw-r--r--  1 optiserver optiserver   108 Nov 11 11:06 CMakeLists.txt
+-rw-r--r--  1 optiserver optiserver   506 Nov 11 11:46 codigo.txt
+-rw-r--r--  1 optiserver optiserver  2772 Nov 11 11:06 dependencies.lock
+drwxr-xr-x  8 optiserver optiserver  4096 Nov 11 11:07 .git
+drwxr-xr-x  3 optiserver optiserver  4096 Nov 11 11:44 main
+drwxr-xr-x  7 optiserver optiserver  4096 Nov 11 11:06 managed_components
+-rw-r--r--  1 optiserver optiserver   232 Nov 11 11:07 partitions.csv
+-rw-r--r--  1 optiserver optiserver 76709 Nov 11 11:07 sdkconfig
+-rw-r--r--  1 optiserver optiserver  1064 Nov 11 11:07 sdkconfig.defaults
 cmake_minimum_required(VERSION 3.16)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(hexapod_idf)
@@ -2719,11 +2753,13 @@ idf_component_register(
         "hardware.c"
         "motion.c"
         "voice.c"
+        "pantalla.c"
     INCLUDE_DIRS "."
     REQUIRES
         driver
         nvs_flash
         esp-sr
+        u8g2
 )
 #include "hardware.h"
 
@@ -2748,7 +2784,6 @@ static i2c_master_dev_handle_t pca_dev = NULL;
 float ang_actual[12];
 int   ang_objetivo[12];
 
-#define INTERVALO_SUAVIZADO_MS 15
 #define VEL_SUAVIZADO_COXA     1.5f
 #define VEL_SUAVIZADO_FEMUR    4.0f
 
@@ -2831,16 +2866,7 @@ void mover_tripode_b(int femur, int coxa_izq, int coxa_der) {
 }
 
 esp_err_t hardware_init(void) {
-    gpio_config_t io_cfg = {
-        .pin_bit_mask = (1ULL << PIN_RADAR) | (1ULL << PIN_CDS),
-        .mode         = GPIO_MODE_INPUT_OUTPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&io_cfg);
-    gpio_set_level(PIN_CDS, 1);
-
+    // I2C para PCA9685
     i2c_master_bus_config_t bus_cfg = {
         .clk_source        = I2C_CLK_SRC_DEFAULT,
         .i2c_port          = I2C_NUM_0,
@@ -2866,7 +2892,7 @@ esp_err_t hardware_init(void) {
         mover_servo_inmediato(i, a);
     }
 
-    ESP_LOGI(TAG, "Hardware listo (PCA9685 en 0x40, I2C 7/8)");
+    ESP_LOGI(TAG, "Hardware listo (PCA9685 0x40, I2C 7/8)");
     return ESP_OK;
 }
 #pragma once
@@ -2877,12 +2903,914 @@ esp_err_t hardware_init(void) {
 // ─── Pines ───
 #define PIN_SDA    7
 #define PIN_SCL    8
-#define PIN_RADAR  5
-#define PIN_CDS    4
+#define PIN_TRIG   4   // HC-SR04 Trigger
+#define PIN_ECHO   5   // HC-SR04 Echo
+#define PIN_CDS    4   // (legado, no se usa)
 #define PIN_SCK    28
 #define PIN_MOSI   29
 #define PIN_CS     32
 #define PIN_RST    33
+
+// ─── LCD ST7920 (SPI por software) ───
+#define PIN_LCD_CLK   PIN_SCK    // 28
+#define PIN_LCD_DATA  PIN_MOSI   // 29
+#define PIN_LCD_CS    PIN_CS     // 32
+#define PIN_LCD_RST   PIN_RST    // 33
+
+// ─── Índices de servos en el PCA9685 ───
+#define D_IZQ_C  0
+#define D_IZQ_F  1
+#define M_IZQ_C  2
+#define M_IZQ_F  3
+#define P_IZQ_C  4
+#define P_IZQ_F  5
+#define D_DER_C  6
+#define D_DER_F  7
+#define M_DER_C  8
+#define M_DER_F  9
+#define P_DER_C 10
+#define P_DER_F 11
+
+// ─── Calibración ───
+#define COXA_CENTRO             90
+#define COXA_IZQ_ADELANTE      115
+#define COXA_IZQ_ATRAS          65
+#define COXA_DER_ADELANTE       65
+#define COXA_DER_ATRAS         115
+
+#define COXA_IZQ_GIRO_ADELANTE 102
+#define COXA_IZQ_GIRO_ATRAS     78
+#define COXA_DER_GIRO_ADELANTE  78
+#define COXA_DER_GIRO_ATRAS    102
+
+#define FEMUR_ACOSTADO         150
+#define FEMUR_LEVANTADO        130
+#define FEMUR_APOYO             45
+
+// ─── Funciones ───
+esp_err_t hardware_init(void);
+int  angulo_a_pulsos(int angulo);
+void mover_servo_inmediato(uint8_t pin, int angulo);
+void mover_servo(uint8_t pin, int angulo);
+void procesar_movimiento_suave(void);
+void mover_todas_caderas_centro(void);
+void mover_tripode_a(int femur, int coxa_izq, int coxa_der);
+void mover_tripode_b(int femur, int coxa_izq, int coxa_der);
+dependencies:
+  idf: ">=5.5"
+  espressif/esp-sr: "~2.6.1"
+  espressif/aht20: "^1.0.0"
+  maucke/bmp280: "^1.0.0"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "hardware.h"
+#include "motion.h"
+#include "voice.h"
+#include "pantalla.h"
+
+static const char *TAG = "MAIN";
+
+void app_main(void)
+{
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    ESP_LOGI(TAG, "Iniciando Hexapodo (FireBeetle 2 ESP32-P4)...");
+
+    ESP_ERROR_CHECK(hardware_init());
+
+    if (voice_init() == ESP_OK) {
+        xTaskCreatePinnedToCore(mic_feed_task, "mic_feed", 8192, NULL, 3, NULL, 0);
+    } else {
+        ESP_LOGE(TAG, "Voz no disponible.");
+    }
+
+    xTaskCreatePinnedToCore(motion_task, "motion", 4096, NULL, 5, NULL, 0);
+
+    pantalla_iniciar();
+
+    ESP_LOGI(TAG, "Sistema listo.");
+}
+#include "motion.h"
+#include "hardware.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_timer.h"
+#include "esp_log.h"
+#include "esp_rom_sys.h"
+
+#include <string.h>
+#include <stdbool.h>
+
+static const char *TAG = "MOTION";
+
+bool robot_encendido     = false;
+bool modo_automatico     = false;
+bool modo_calibracion    = false;
+int  direccion_actual    = 0;
+int  velocidad_caminata  = 600;
+bool en_transicion       = false;
+
+static char accion_actual[32] = "ESTATICO";
+
+void set_accion(const char *texto) {
+    strncpy(accion_actual, texto, sizeof(accion_actual) - 1);
+    accion_actual[sizeof(accion_actual) - 1] = '\0';
+}
+const char *get_accion(void) { return accion_actual; }
+
+// ─── HC-SR04 en GPIO 4 (Trig) / GPIO 5 (Echo) ───
+#define TIMEOUT_US 30000
+
+static void hcsr04_init(void) {
+    gpio_config_t trig = {
+        .pin_bit_mask = (1ULL << PIN_TRIG),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&trig);
+    gpio_set_level(PIN_TRIG, 0);
+
+    gpio_config_t echo = {
+        .pin_bit_mask = (1ULL << PIN_ECHO),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&echo);
+}
+
+static float hcsr04_medir_cm(void) {
+    gpio_set_level(PIN_TRIG, 1);
+    esp_rom_delay_us(10);
+    gpio_set_level(PIN_TRIG, 0);
+
+    int64_t t0 = esp_timer_get_time();
+    while (gpio_get_level(PIN_ECHO) == 0) {
+        if (esp_timer_get_time() - t0 > TIMEOUT_US) return -1.0f;
+    }
+
+    int64_t inicio = esp_timer_get_time();
+    while (gpio_get_level(PIN_ECHO) == 1) {
+        if (esp_timer_get_time() - inicio > TIMEOUT_US) return -1.0f;
+    }
+    int64_t fin = esp_timer_get_time();
+
+    return (float)(fin - inicio) * 0.0343f / 2.0f;
+}
+
+static bool obstaculo_detectado(void) {
+    float d = hcsr04_medir_cm();
+    return (d > 0.0f && d < 20.0f);
+}
+
+// ─── Marcha de 6 fases ───
+static int fase_marcha = 0;
+static unsigned long tiempo_paso = 0;
+static int direccion_anterior = 0;
+
+static void caminar(int direccion) {
+    unsigned long ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (ahora - tiempo_paso < (unsigned long)velocidad_caminata) return;
+    tiempo_paso = ahora;
+
+    if (direccion == 1) {
+        set_accion("MOV: ATRAS");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
+    }
+    else if (direccion == 2) {
+        set_accion("MOV: ADELANTE");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
+    }
+    else if (direccion == 4) {
+        set_accion("GIRO: IZQUIERDA");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
+    }
+    else if (direccion == 5) {
+        set_accion("GIRO: DERECHA");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE);
+    }
+
+    fase_marcha = (fase_marcha + 1) % 6;
+}
+
+void transicion_postura(bool levantar) {
+    en_transicion = true;
+    set_accion(levantar ? "LEVANTANDO..." : "APAGANDO...");
+
+    int inicial = levantar ? FEMUR_ACOSTADO : FEMUR_APOYO;
+    int final_  = levantar ? FEMUR_APOYO    : FEMUR_ACOSTADO;
+    int inc     = (final_ > inicial) ? 5 : -5;
+    int actual  = inicial;
+
+    mover_todas_caderas_centro();
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    while (actual != final_) {
+        actual += inc;
+        if ((inc > 0 && actual > final_) || (inc < 0 && actual < final_)) actual = final_;
+
+        mover_servo_inmediato(D_IZQ_F, actual);
+        mover_servo_inmediato(M_IZQ_F, actual);
+        mover_servo_inmediato(P_IZQ_F, actual);
+        mover_servo_inmediato(D_DER_F, actual);
+        mover_servo_inmediato(M_DER_F, actual);
+        mover_servo_inmediato(P_DER_F, actual);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    robot_encendido = levantar;
+    set_accion("ESTATICO");
+    en_transicion = false;
+}
+
+void flexiones(void) {
+    en_transicion = true;
+    set_accion("FLEXIONES");
+
+    for (int r = 0; r < 3; r++) {
+        for (int i = 1; i < 12; i += 2) mover_servo_inmediato(i, FEMUR_APOYO);
+        mover_todas_caderas_centro();
+        vTaskDelay(pdMS_TO_TICKS(400));
+
+        for (int i = 1; i < 12; i += 2) mover_servo_inmediato(i, FEMUR_ACOSTADO);
+        vTaskDelay(pdMS_TO_TICKS(400));
+    }
+
+    mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
+    mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
+    set_accion("ESTATICO");
+    en_transicion = false;
+}
+
+void motion_task(void *pvParameters) {
+    hcsr04_init();
+
+    while (1) {
+        if (!en_transicion) {
+            procesar_movimiento_suave();
+        }
+
+        if (robot_encendido && !en_transicion) {
+            if (!modo_calibracion) {
+                if (obstaculo_detectado() && direccion_actual != 0) {
+                    direccion_actual = 0;
+                    set_accion("OBSTACULO");
+                    ESP_LOGW(TAG, "Obstaculo detectado");
+                }
+
+                if (direccion_actual != direccion_anterior) {
+                    fase_marcha = 0;
+                    direccion_anterior = direccion_actual;
+                }
+
+                if (direccion_actual != 0) {
+                    caminar(direccion_actual);
+                } else {
+                    mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
+                    mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
+                    fase_marcha = 0;
+                    if (strcmp(get_accion(), "OBSTACULO") != 0) {
+                        set_accion("ESTATICO");
+                    }
+                }
+            } else {
+                set_accion("MODO SERVOS");
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+#pragma once
+#include <stdbool.h>
+
+extern bool robot_encendido;
+extern bool modo_automatico;
+extern bool modo_calibracion;
+extern int  direccion_actual;
+extern int  velocidad_caminata;
+extern bool en_transicion;
+
+void set_accion(const char *texto);
+const char *get_accion(void);
+
+void transicion_postura(bool levantar);
+void flexiones(void);
+
+void motion_task(void *pvParameters);
+#include "pantalla.h"
+#include "hardware.h"
+#include "motion.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "esp_log.h"
+#include "esp_rom_sys.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "u8g2.h"
+#include "aht20.h"
+#include "bmp280.h"
+
+static const char *TAG = "PANTALLA";
+
+#define PANTALLA_PERIODO_MS  500
+#define AHT20_ADDR           0x38
+#define BMP280_ADDR          0x76   // prueba 0x77 si no responde
+
+static u8g2_t u8g2;
+
+// ─────────────────────────────────────────────────────────────
+// Callback GPIO + delay para u8g2 (SW SPI en ESP-IDF)
+// ─────────────────────────────────────────────────────────────
+static uint8_t gpio_and_delay_esp32(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
+{
+    switch (msg) {
+        case U8X8_MSG_GPIO_AND_DELAY_INIT: {
+            gpio_config_t io_conf = {
+                .pin_bit_mask = (1ULL << PIN_LCD_CLK) | (1ULL << PIN_LCD_DATA) |
+                                (1ULL << PIN_LCD_CS)  | (1ULL << PIN_LCD_RST),
+                .mode         = GPIO_MODE_OUTPUT,
+                .pull_up_en   = GPIO_PULLUP_DISABLE,
+                .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                .intr_type    = GPIO_INTR_DISABLE,
+            };
+            gpio_config(&io_conf);
+            gpio_set_level(PIN_LCD_CS, 1);
+            gpio_set_level(PIN_LCD_RST, 1);
+            break;
+        }
+        case U8X8_MSG_DELAY_NANO:
+            esp_rom_delay_us(1);
+            break;
+        case U8X8_MSG_DELAY_100NANO:
+            esp_rom_delay_us(1);
+            break;
+        case U8X8_MSG_DELAY_10MICRO:
+            esp_rom_delay_us(10);
+            break;
+        case U8X8_MSG_DELAY_MILLI:
+            vTaskDelay(pdMS_TO_TICKS(arg_int));
+            break;
+        case U8X8_MSG_GPIO_CS:
+            gpio_set_level(PIN_LCD_CS, arg_int);
+            break;
+        case U8X8_MSG_GPIO_RESET:
+            gpio_set_level(PIN_LCD_RST, arg_int);
+            break;
+        case U8X8_MSG_GPIO_SPI_CLOCK:
+            gpio_set_level(PIN_LCD_CLK, arg_int);
+            break;
+        case U8X8_MSG_GPIO_SPI_DATA:
+        case U8X8_MSG_GPIO_MOSI:
+            gpio_set_level(PIN_LCD_DATA, arg_int);
+            break;
+        default:
+            return 0;
+    }
+    return 1;
+}
+
+static const char *modo_texto(void)
+{
+    if (modo_calibracion) return "SERVOS";
+    return modo_automatico ? "AUTOMATICO" : "MANUAL";
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tarea de pantalla
+// ─────────────────────────────────────────────────────────────
+static void tarea_pantalla(void *pvParameters)
+{
+    // ─── Bus I2C propio de esta tarea (para sensores) ───
+    i2c_master_bus_handle_t bus = NULL;
+    i2c_master_bus_config_t bus_cfg = {
+        .clk_source        = I2C_CLK_SRC_DEFAULT,
+        .i2c_port          = I2C_NUM_0,
+        .scl_io_num        = PIN_SCL,
+        .sda_io_num        = PIN_SDA,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    if (i2c_new_master_bus(&bus_cfg, &bus) != ESP_OK) {
+        ESP_LOGE(TAG, "No se pudo crear el bus I2C");
+        bus = NULL;
+    }
+
+    // ─── AHT20 (temp + humedad) ───
+    aht20_dev_handle_t aht20_h = NULL;
+    if (bus) {
+        i2c_device_config_t cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address  = AHT20_ADDR,
+            .scl_speed_hz    = 400000,
+        };
+        i2c_master_dev_handle_t dev;
+        if (i2c_master_bus_add_device(bus, &cfg, &dev) == ESP_OK) {
+            aht20_init(&aht20_h, dev);
+            ESP_LOGI(TAG, "AHT20 OK");
+        }
+    }
+
+    // ─── BMP280 (presion) ───
+    bmp280_dev_handle_t bmp280_h = NULL;
+    if (bus) {
+        i2c_device_config_t cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address  = BMP280_ADDR,
+            .scl_speed_hz    = 400000,
+        };
+        i2c_master_dev_handle_t dev;
+        if (i2c_master_bus_add_device(bus, &cfg, &dev) == ESP_OK) {
+            bmp280_init(&bmp280_h, dev);
+            ESP_LOGI(TAG, "BMP280 OK");
+        }
+    }
+
+    char ant[5][24] = {0};
+
+    while (1) {
+        // 1) Leer sensores
+        float temp = 0.0f, hum = 0.0f, pres = 0.0f;
+        bool temp_ok = false;
+
+        if (aht20_h) {
+            if (aht20_get_sensor_data(aht20_h, &temp, &hum) == ESP_OK) {
+                temp_ok = true;
+            }
+        }
+        if (bmp280_h) {
+            bmp280_read_pressure(bmp280_h, &pres);
+        }
+
+        // 2) Formatear 5 lineas
+        char l[5][24];
+
+        if (temp_ok)
+            snprintf(l[0], sizeof(l[0]), "T:%.1fC H:%.0f%%", temp, hum);
+        else
+            snprintf(l[0], sizeof(l[0]), "T:--  H:--");
+
+        snprintf(l[1], sizeof(l[1]), "P:%.0fhPa", pres);
+        snprintf(l[2], sizeof(l[2]), "Modo: %s", modo_texto());
+        snprintf(l[3], sizeof(l[3]), "%.20s", get_accion());
+        snprintf(l[4], sizeof(l[4]), "%s",
+                 robot_encendido ? "ESTADO: DE PIE" : "ESTADO: APAGADO");
+
+        // 3) Redibujar solo si algo cambio
+        bool cambio = false;
+        for (int i = 0; i < 5; i++) {
+            if (strcmp(l[i], ant[i]) != 0) { cambio = true; break; }
+        }
+
+        if (cambio) {
+            u8g2_ClearBuffer(&u8g2);
+            u8g2_SetFont(&u8g2, u8g2_font_6x10_tf);
+
+            u8g2_DrawStr(&u8g2, 0, 10, l[0]);  // T + H
+            u8g2_DrawStr(&u8g2, 0, 22, l[1]);  // Presion
+            u8g2_DrawStr(&u8g2, 0, 34, l[2]);  // Modo
+            u8g2_DrawStr(&u8g2, 0, 46, l[3]);  // Accion
+            u8g2_DrawLine(&u8g2, 0, 51, 128, 51);
+            u8g2_DrawStr(&u8g2, 0, 62, l[4]);  // Estado
+
+            u8g2_SendBuffer(&u8g2);
+            memcpy(ant, l, sizeof(ant));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(PANTALLA_PERIODO_MS));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Inicializacion
+// ─────────────────────────────────────────────────────────────
+void pantalla_iniciar(void)
+{
+    u8g2_Setup_st7920_s_128x64_f(&u8g2, U8G2_R0,
+                                 u8x8_byte_st7920_sw_spi,
+                                 gpio_and_delay_esp32);
+    u8g2_InitDisplay(&u8g2);
+    u8g2_SetPowerSave(&u8g2, 0);
+    u8g2_ClearBuffer(&u8g2);
+    u8g2_SendBuffer(&u8g2);
+
+    ESP_LOGI(TAG, "LCD ST7920 iniciado (CLK=%d DATA=%d CS=%d RST=%d)",
+             PIN_LCD_CLK, PIN_LCD_DATA, PIN_LCD_CS, PIN_LCD_RST);
+
+    xTaskCreatePinnedToCore(tarea_pantalla, "Pantalla", 4096, NULL, 4, NULL, 0);
+}
+#pragma once
+
+// Inicia LCD ST7920 128x64, AHT20 y BMP280.
+// Crea la tarea que refresca la pantalla con:
+//  Temperatura, Humedad, Presion, Modo, Accion y Estado.
+void pantalla_iniciar(void);
+#include "voice.h"
+#include "motion.h"
+#include "hardware.h"
+
+#include "driver/gpio.h"
+#include "driver/i2s_pdm.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+#include "esp_afe_config.h"
+#include "esp_afe_sr_iface.h"
+#include "esp_afe_sr_models.h"
+#include "esp_mn_iface.h"
+#include "esp_mn_models.h"
+#include "esp_mn_speech_commands.h"
+
+#include <stdlib.h>
+
+static const char *TAG = "VOICE";
+
+#define PDM_CLK_PIN   12
+#define PDM_DATA_PIN  9
+
+static const esp_afe_sr_iface_t *afe_handle = NULL;
+static esp_afe_sr_data_t        *afe_data   = NULL;
+static esp_mn_iface_t           *multinet   = NULL;
+static model_iface_data_t       *mn_data    = NULL;
+static bool voice_ready = false;
+
+static i2s_chan_handle_t rx_handle = NULL;
+
+static int ultimo_id = -1;
+static TickType_t tiempo_ultimo_id = 0;
+#define DEBOUNCE_MS 800
+
+static void aplicar_comando_voz(int id) {
+    TickType_t ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (id == ultimo_id && (ahora - tiempo_ultimo_id) < DEBOUNCE_MS) return;
+    ultimo_id = id;
+    tiempo_ultimo_id = ahora;
+
+    ESP_LOGI(TAG, "Comando de voz detectado: id=%d", id);
+
+    switch (id) {
+        case 0: // go
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 2;
+            }
+            break;
+        case 1: // back
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 1;
+            }
+            break;
+        case 2: // left
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 4;
+            }
+            break;
+        case 3: // right
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 5;
+            }
+            break;
+        case 4: // jump
+            if (robot_encendido && !modo_automatico && !modo_calibracion)
+                flexiones();
+            break;
+        case 5: // power
+            transicion_postura(!robot_encendido);
+            if (!robot_encendido) {
+                direccion_actual = 0;
+                modo_calibracion = false;
+            }
+            break;
+    }
+}
+
+esp_err_t voice_init(void) {
+    srmodel_list_t *models = esp_srmodel_init("model");
+    if (!models) {
+        ESP_LOGE(TAG, "esp_srmodel_init fallo");
+        return ESP_FAIL;
+    }
+
+    afe_config_t *afe_config = afe_config_init("M", models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
+    if (!afe_config) {
+        ESP_LOGE(TAG, "afe_config_init fallo");
+        return ESP_FAIL;
+    }
+
+    afe_handle = esp_afe_handle_from_config(afe_config);
+    if (!afe_handle) {
+        ESP_LOGE(TAG, "afe_handle fallo");
+        return ESP_FAIL;
+    }
+
+    afe_data = afe_handle->create_from_config(afe_config);
+    if (!afe_data) {
+        ESP_LOGE(TAG, "afe create fallo");
+        return ESP_FAIL;
+    }
+
+    char *mn_name = esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_ENGLISH);
+    if (!mn_name) {
+        ESP_LOGE(TAG, "no MN ingles");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "Modelo MultiNet: %s", mn_name);
+
+    multinet = esp_mn_handle_from_name(mn_name);
+    if (!multinet) {
+        ESP_LOGE(TAG, "mn_handle fallo");
+        return ESP_FAIL;
+    }
+
+    mn_data = multinet->create(mn_name, 5760);
+    if (!mn_data) {
+        ESP_LOGE(TAG, "mn create fallo");
+        return ESP_FAIL;
+    }
+
+    esp_mn_commands_clear();
+    esp_mn_commands_add(0, "go");
+    esp_mn_commands_add(1, "back");
+    esp_mn_commands_add(2, "left");
+    esp_mn_commands_add(3, "right");
+    esp_mn_commands_add(4, "jump");
+    esp_mn_commands_add(5, "power");
+    esp_mn_commands_update();
+
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &rx_handle));
+
+    i2s_pdm_rx_config_t pdm_cfg = {
+        .clk_cfg  = I2S_PDM_RX_CLK_DEFAULT_CONFIG(16000),
+        .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .clk = PDM_CLK_PIN,
+            .din = PDM_DATA_PIN,
+        },
+    };
+    ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(rx_handle, &pdm_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
+
+    voice_ready = true;
+    ESP_LOGI(TAG, "ESP-SR inicializado (PDM GPIO12/9)");
+    return ESP_OK;
+}
+
+void mic_feed_task(void *pvParameters) {
+    if (!voice_ready || !rx_handle) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    int chunksize = afe_handle->get_feed_chunksize(afe_data);
+    size_t size   = (size_t)chunksize * sizeof(int16_t);
+
+    int16_t *buffer = malloc(size);
+    if (!buffer) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    ESP_LOGI(TAG, "mic_feed_task (chunk=%d)", chunksize);
+
+    while (1) {
+        size_t bytes_read = 0;
+        esp_err_t ret = i2s_channel_read(rx_handle, buffer, size, &bytes_read, portMAX_DELAY);
+        if (ret != ESP_OK || bytes_read == 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        afe_handle->feed(afe_data, buffer);
+
+        afe_fetch_result_t *res = afe_handle->fetch(afe_data);
+        if (!res || res->ret_value == ESP_FAIL) continue;
+
+        if (res->wakeup_state == WAKENET_DETECTED) {
+            ESP_LOGI(TAG, ">>> WAKE WORD <<<");
+        }
+
+        esp_mn_state_t state = multinet->detect(mn_data, res->data);
+        if (state == ESP_MN_STATE_DETECTED) {
+            esp_mn_results_t *r = multinet->get_results(mn_data);
+            if (r && r->num > 0) {
+                aplicar_comando_voz(r->phrase_id[0]);
+            }
+        }
+    }
+}
+#pragma once
+#include "esp_err.h"
+
+esp_err_t voice_init(void);
+void      mic_feed_task(void *pvParameters);
+idf_component_register(
+    SRCS
+        "main.c"
+        "hardware.c"
+        "motion.c"
+        "voice.c"
+        "pantalla.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        nvs_flash
+        esp-sr
+        u8g2
+)
+#include "hardware.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/i2c_master.h"
+#include "driver/gpio.h"
+#include "esp_log.h"
+
+#include <math.h>
+#include <stdbool.h>
+
+static const char *TAG = "HW";
+
+#define PCA9685_ADDR     0x40
+#define PCA9685_MODE1    0x00
+#define PCA9685_PRESCALE 0xFE
+
+static i2c_master_bus_handle_t i2c_bus = NULL;
+static i2c_master_dev_handle_t pca_dev = NULL;
+
+float ang_actual[12];
+int   ang_objetivo[12];
+
+#define VEL_SUAVIZADO_COXA     1.5f
+#define VEL_SUAVIZADO_FEMUR    4.0f
+
+static esp_err_t pca_write_reg(uint8_t reg, uint8_t val) {
+    uint8_t buf[2] = { reg, val };
+    return i2c_master_transmit(pca_dev, buf, 2, 1000);
+}
+
+static void pca9685_set_pwm_freq(float freq_hz) {
+    uint8_t prescale = (uint8_t)((25000000.0f / (4096.0f * freq_hz)) - 1.0f + 0.5f);
+    pca_write_reg(PCA9685_MODE1, 0x10);
+    pca_write_reg(PCA9685_PRESCALE, prescale);
+    vTaskDelay(pdMS_TO_TICKS(1));
+    pca_write_reg(PCA9685_MODE1, 0x00);
+    vTaskDelay(pdMS_TO_TICKS(1));
+}
+
+static void pca9685_set_channel(uint8_t canal, uint16_t valor) {
+    uint8_t base = 0x06 + 4 * canal;
+    uint8_t off_l = valor & 0xFF;
+    uint8_t off_h = (valor >> 8) & 0x0F;
+    pca_write_reg(base + 0, 0);
+    pca_write_reg(base + 1, 0);
+    pca_write_reg(base + 2, off_l);
+    pca_write_reg(base + 3, off_h);
+}
+
+int angulo_a_pulsos(int angulo) {
+    if (angulo < 0)   angulo = 0;
+    if (angulo > 180) angulo = 180;
+    return 130 + (angulo * (480 - 130) / 180);
+}
+
+void mover_servo_inmediato(uint8_t pin, int angulo) {
+    if (pin > 11) return;
+    ang_actual[pin]   = (float)angulo;
+    ang_objetivo[pin] = angulo;
+    pca9685_set_channel(pin, angulo_a_pulsos(angulo));
+}
+
+void mover_servo(uint8_t pin, int angulo) {
+    if (pin > 11) return;
+    ang_objetivo[pin] = angulo;
+}
+
+void procesar_movimiento_suave(void) {
+    for (int i = 0; i < 12; i++) {
+        float diff = (float)ang_objetivo[i] - ang_actual[i];
+        if (fabsf(diff) > 0.5f) {
+            float vel = (i % 2 == 1) ? VEL_SUAVIZADO_FEMUR : VEL_SUAVIZADO_COXA;
+            if (diff > 0.0f) ang_actual[i] += vel;
+            else             ang_actual[i] -= vel;
+            if (fabsf((float)ang_objetivo[i] - ang_actual[i]) <= vel) {
+                ang_actual[i] = (float)ang_objetivo[i];
+            }
+            pca9685_set_channel(i, angulo_a_pulsos((int)ang_actual[i]));
+        }
+    }
+}
+
+void mover_todas_caderas_centro(void) {
+    mover_servo_inmediato(D_IZQ_C, COXA_CENTRO);
+    mover_servo_inmediato(M_IZQ_C, COXA_CENTRO);
+    mover_servo_inmediato(P_IZQ_C, COXA_CENTRO);
+    mover_servo_inmediato(D_DER_C, COXA_CENTRO);
+    mover_servo_inmediato(M_DER_C, COXA_CENTRO);
+    mover_servo_inmediato(P_DER_C, COXA_CENTRO);
+}
+
+void mover_tripode_a(int femur, int coxa_izq, int coxa_der) {
+    mover_servo(D_IZQ_F, femur); mover_servo(D_IZQ_C, coxa_izq);
+    mover_servo(P_IZQ_F, femur); mover_servo(P_IZQ_C, coxa_izq);
+    mover_servo(M_DER_F, femur); mover_servo(M_DER_C, coxa_der);
+}
+
+void mover_tripode_b(int femur, int coxa_izq, int coxa_der) {
+    mover_servo(M_IZQ_F, femur); mover_servo(M_IZQ_C, coxa_izq);
+    mover_servo(D_DER_F, femur); mover_servo(D_DER_C, coxa_der);
+    mover_servo(P_DER_F, femur); mover_servo(P_DER_C, coxa_der);
+}
+
+esp_err_t hardware_init(void) {
+    // I2C para PCA9685
+    i2c_master_bus_config_t bus_cfg = {
+        .clk_source        = I2C_CLK_SRC_DEFAULT,
+        .i2c_port          = I2C_NUM_0,
+        .scl_io_num        = PIN_SCL,
+        .sda_io_num        = PIN_SDA,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &i2c_bus));
+
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address  = PCA9685_ADDR,
+        .scl_speed_hz    = 400000,
+    };
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus, &dev_cfg, &pca_dev));
+
+    pca_write_reg(PCA9685_MODE1, 0x00);
+    pca9685_set_pwm_freq(50.0f);
+
+    for (int i = 0; i < 12; i++) {
+        int a = (i % 2 == 1) ? FEMUR_ACOSTADO : COXA_CENTRO;
+        mover_servo_inmediato(i, a);
+    }
+
+    ESP_LOGI(TAG, "Hardware listo (PCA9685 0x40, I2C 7/8)");
+    return ESP_OK;
+}
+#pragma once
+#include <stdint.h>
+#include <stdbool.h>
+#include "esp_err.h"
+
+// ─── Pines ───
+#define PIN_SDA    7
+#define PIN_SCL    8
+#define PIN_TRIG   4   // HC-SR04 Trigger
+#define PIN_ECHO   5   // HC-SR04 Echo
+#define PIN_CDS    4   // (legado, no se usa)
+#define PIN_SCK    28
+#define PIN_MOSI   29
+#define PIN_CS     32
+#define PIN_RST    33
+
+// ─── LCD ST7920 (SPI por software) ───
+#define PIN_LCD_CLK   PIN_SCK    // 28
+#define PIN_LCD_DATA  PIN_MOSI   // 29
+#define PIN_LCD_CS    PIN_CS     // 32
+#define PIN_LCD_RST   PIN_RST    // 33
 
 // ─── Índices de servos en el PCA9685 ───
 #define D_IZQ_C  0
@@ -2926,6 +3854,8 @@ void mover_tripode_b(int femur, int coxa_izq, int coxa_der);
 dependencies:
   idf: ">=5.4"
   espressif/esp-sr: "~2.6.1"
+  espressif/aht20: "^1.0.0"
+  maucke/bmp280: "^1.0.0"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "freertos/FreeRTOS.h"
@@ -2934,6 +3864,7 @@ dependencies:
 #include "hardware.h"
 #include "motion.h"
 #include "voice.h"
+#include "pantalla.h"
 
 static const char *TAG = "MAIN";
 
@@ -2958,6 +3889,8 @@ void app_main(void)
 
     xTaskCreatePinnedToCore(motion_task, "motion", 4096, NULL, 5, NULL, 0);
 
+    pantalla_iniciar();
+
     ESP_LOGI(TAG, "Sistema listo.");
 }
 #include "motion.h"
@@ -2966,20 +3899,21 @@ void app_main(void)
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
+#include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_rom_sys.h"
 
 #include <string.h>
 #include <stdbool.h>
 
 static const char *TAG = "MOTION";
 
-bool robot_encendido              = false;
-bool modo_automatico              = false;
-bool modo_calibracion             = false;
-bool radar_fisicamente_encendido  = true;
-int  direccion_actual             = 0;   // 0=stop, 1=go, 2=back, 4=right, 5=left
-int  velocidad_caminata           = 600;
-bool en_transicion                = false;
+bool robot_encendido     = false;
+bool modo_automatico     = false;
+bool modo_calibracion    = false;
+int  direccion_actual    = 0;
+int  velocidad_caminata  = 600;
+bool en_transicion       = false;
 
 static char accion_actual[32] = "ESTATICO";
 
@@ -2989,190 +3923,104 @@ void set_accion(const char *texto) {
 }
 const char *get_accion(void) { return accion_actual; }
 
+// ─── HC-SR04 en GPIO 4 (Trig) / GPIO 5 (Echo) ───
+#define TIMEOUT_US 30000
+
+static void hcsr04_init(void) {
+    gpio_config_t trig = {
+        .pin_bit_mask = (1ULL << PIN_TRIG),
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&trig);
+    gpio_set_level(PIN_TRIG, 0);
+
+    gpio_config_t echo = {
+        .pin_bit_mask = (1ULL << PIN_ECHO),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_ENABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&echo);
+}
+
+static float hcsr04_medir_cm(void) {
+    gpio_set_level(PIN_TRIG, 1);
+    esp_rom_delay_us(10);
+    gpio_set_level(PIN_TRIG, 0);
+
+    int64_t t0 = esp_timer_get_time();
+    while (gpio_get_level(PIN_ECHO) == 0) {
+        if (esp_timer_get_time() - t0 > TIMEOUT_US) return -1.0f;
+    }
+
+    int64_t inicio = esp_timer_get_time();
+    while (gpio_get_level(PIN_ECHO) == 1) {
+        if (esp_timer_get_time() - inicio > TIMEOUT_US) return -1.0f;
+    }
+    int64_t fin = esp_timer_get_time();
+
+    return (float)(fin - inicio) * 0.0343f / 2.0f;
+}
+
+static bool obstaculo_detectado(void) {
+    float d = hcsr04_medir_cm();
+    return (d > 0.0f && d < 20.0f);
+}
+
+// ─── Marcha de 6 fases ───
 static int fase_marcha = 0;
 static unsigned long tiempo_paso = 0;
 static int direccion_anterior = 0;
 
-// ─── Evasión ───
-static bool modo_evasion = false;
-static int direccion_evasion = 0;
-static TickType_t t_evasion_ini = 0;
-
-// ─── Helpers de trípode con amplitudes por pata ───
-// Cada función recibe 6 amplitudes (grados desde COXA_CENTRO) para cada pata:
-// orden: D_IZQ, M_IZQ, P_IZQ, D_DER, M_DER, P_DER
-// La función suma esas amplitudes a COXA_CENTRO con el signo adecuado
-// para que "positivo" siempre signifique "adelante" en esa pata.
-
-static void mover_tripode_a_amp(int amp_d_izq, int amp_m_izq, int amp_p_izq,
-                                 int amp_d_der, int amp_m_der, int amp_p_der) {
-    // Trípode A: D_IZQ, P_IZQ, M_DER
-    mover_servo(D_IZQ_C, COXA_CENTRO + amp_d_izq);
-    mover_servo(P_IZQ_C, COXA_CENTRO + amp_p_izq);
-    mover_servo(M_DER_C, COXA_CENTRO - amp_m_der);   // derecha: signo invertido
-}
-
-static void mover_tripode_b_amp(int amp_d_izq, int amp_m_izq, int amp_p_izq,
-                                 int amp_d_der, int amp_m_der, int amp_p_der) {
-    // Trípode B: M_IZQ, D_DER, P_DER
-    mover_servo(M_IZQ_C, COXA_CENTRO + amp_m_izq);
-    mover_servo(D_DER_C, COXA_CENTRO - amp_d_der);
-    mover_servo(P_DER_C, COXA_CENTRO - amp_p_der);
-}
-
-// ─── Marcha de 6 fases con amplitudes por pata ───
-static void caminar_amp(int direccion,
-                        int f_d_izq, int f_m_izq, int f_p_izq,
-                        int f_d_der, int f_m_der, int f_p_der,
-                        int b_d_izq, int b_m_izq, int b_p_izq,
-                        int b_d_der, int b_m_der, int b_p_der) {
-    if ((direccion == 1 || direccion == 2) &&
-        radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-        return;
-    }
+static void caminar(int direccion) {
     unsigned long ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
     if (ahora - tiempo_paso < (unsigned long)velocidad_caminata) return;
     tiempo_paso = ahora;
 
-    // Fase 0: A center-up, B fija en back-down
-    // Fase 1: A forward-up, B back-down
-    // Fase 2: A forward-down (planta)
-    // Fase 3: B center-up, A fija en back-down
-    // Fase 4: B forward-up, A back-down
-    // Fase 5: B forward-down (planta)
-    if (fase_marcha == 0) {
-        mover_tripode_a_amp(0, 0, 0, 0, 0, 0);
-        // fémures A arriba
-        mover_servo(D_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(P_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(M_DER_F, FEMUR_LEVANTADO);
-        mover_tripode_b_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(M_IZQ_F, FEMUR_APOYO);
-        mover_servo(D_DER_F, FEMUR_APOYO);
-        mover_servo(P_DER_F, FEMUR_APOYO);
+    if (direccion == 1) {
+        set_accion("MOV: ATRAS");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE);
     }
-    else if (fase_marcha == 1) {
-        mover_tripode_a_amp(f_d_izq, f_m_izq, f_p_izq, f_d_der, f_m_der, f_p_der);
-        mover_servo(D_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(P_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(M_DER_F, FEMUR_LEVANTADO);
-        mover_tripode_b_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(M_IZQ_F, FEMUR_APOYO);
-        mover_servo(D_DER_F, FEMUR_APOYO);
-        mover_servo(P_DER_F, FEMUR_APOYO);
+    else if (direccion == 2) {
+        set_accion("MOV: ADELANTE");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_ATRAS, COXA_DER_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_ADELANTE, COXA_DER_ADELANTE); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_ATRAS, COXA_DER_ATRAS);
     }
-    else if (fase_marcha == 2) {
-        mover_tripode_a_amp(f_d_izq, f_m_izq, f_p_izq, f_d_der, f_m_der, f_p_der);
-        mover_servo(D_IZQ_F, FEMUR_APOYO);
-        mover_servo(P_IZQ_F, FEMUR_APOYO);
-        mover_servo(M_DER_F, FEMUR_APOYO);
-        mover_tripode_b_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(M_IZQ_F, FEMUR_APOYO);
-        mover_servo(D_DER_F, FEMUR_APOYO);
-        mover_servo(P_DER_F, FEMUR_APOYO);
+    else if (direccion == 4) {
+        set_accion("GIRO: IZQUIERDA");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS);
     }
-    else if (fase_marcha == 3) {
-        mover_tripode_a_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(D_IZQ_F, FEMUR_APOYO);
-        mover_servo(P_IZQ_F, FEMUR_APOYO);
-        mover_servo(M_DER_F, FEMUR_APOYO);
-        mover_tripode_b_amp(0, 0, 0, 0, 0, 0);
-        mover_servo(M_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(D_DER_F, FEMUR_LEVANTADO);
-        mover_servo(P_DER_F, FEMUR_LEVANTADO);
-    }
-    else if (fase_marcha == 4) {
-        mover_tripode_a_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(D_IZQ_F, FEMUR_APOYO);
-        mover_servo(P_IZQ_F, FEMUR_APOYO);
-        mover_servo(M_DER_F, FEMUR_APOYO);
-        mover_tripode_b_amp(f_d_izq, f_m_izq, f_p_izq, f_d_der, f_m_der, f_p_der);
-        mover_servo(M_IZQ_F, FEMUR_LEVANTADO);
-        mover_servo(D_DER_F, FEMUR_LEVANTADO);
-        mover_servo(P_DER_F, FEMUR_LEVANTADO);
-    }
-    else if (fase_marcha == 5) {
-        mover_tripode_a_amp(b_d_izq, b_m_izq, b_p_izq, b_d_der, b_m_der, b_p_der);
-        mover_servo(D_IZQ_F, FEMUR_APOYO);
-        mover_servo(P_IZQ_F, FEMUR_APOYO);
-        mover_servo(M_DER_F, FEMUR_APOYO);
-        mover_tripode_b_amp(f_d_izq, f_m_izq, f_p_izq, f_d_der, f_m_der, f_p_der);
-        mover_servo(M_IZQ_F, FEMUR_APOYO);
-        mover_servo(D_DER_F, FEMUR_APOYO);
-        mover_servo(P_DER_F, FEMUR_APOYO);
+    else if (direccion == 5) {
+        set_accion("GIRO: DERECHA");
+        if (fase_marcha == 0) mover_tripode_a(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 1) { mover_tripode_a(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); }
+        else if (fase_marcha == 2) mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE);
+        else if (fase_marcha == 3) mover_tripode_b(FEMUR_LEVANTADO, COXA_CENTRO, COXA_CENTRO);
+        else if (fase_marcha == 4) { mover_tripode_b(FEMUR_LEVANTADO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE); mover_tripode_a(FEMUR_APOYO, COXA_IZQ_GIRO_ADELANTE, COXA_DER_GIRO_ATRAS); }
+        else if (fase_marcha == 5) mover_tripode_b(FEMUR_APOYO, COXA_IZQ_GIRO_ATRAS, COXA_DER_GIRO_ADELANTE);
     }
 
     fase_marcha = (fase_marcha + 1) % 6;
 }
 
-// ─── Amplitudes para cada dirección ───
-// forward/back: ángulo 25° (≈ 115°-90°)
-// strafe: patas laterales 25°, diagonales 10° (atenuadas para no rotar)
-
-#define AMP_FWD   25
-#define AMP_BACK -25
-#define AMP_STRAFE_LAT  25
-#define AMP_STRAFE_DIAG 10
-
-// GO (adelante): izquierdas adelante, derechas adelante (en su marco invertido)
-static void caminar_go(void) {
-    set_accion("MOV: ADELANTE");
-    caminar_amp(1,
-        AMP_FWD, AMP_FWD, AMP_FWD,   // A fwd
-        AMP_FWD, AMP_FWD, AMP_FWD,
-        AMP_BACK, AMP_BACK, AMP_BACK, // B back
-        AMP_BACK, AMP_BACK, AMP_BACK);
-}
-
-// BACK (atrás): izquierdas atrás, derechas atrás
-static void caminar_back(void) {
-    set_accion("MOV: ATRAS");
-    caminar_amp(2,
-        AMP_BACK, AMP_BACK, AMP_BACK,
-        AMP_BACK, AMP_BACK, AMP_BACK,
-        AMP_FWD, AMP_FWD, AMP_FWD,
-        AMP_FWD, AMP_FWD, AMP_FWD);
-}
-
-// LEFT (strafe izquierda):
-// - izq laterales empujan "adelante" (en su marco, eso lleva el cuerpo a la izq)
-// - izq diagonales empujan "atrás" atenuado (para cancelar rotación)
-// - der laterales empujan "adelante" (en su marco invertido, eso también lleva el cuerpo a la izq)
-// - der diagonales empujan "atrás" atenuado
-static void caminar_left(void) {
-    set_accion("STRAFE: IZQ");
-    caminar_amp(5,
-        // A fwd (patas que empujan)
-        -AMP_STRAFE_DIAG, AMP_STRAFE_LAT, -AMP_STRAFE_DIAG,   // D_IZQ, M_IZQ, P_IZQ
-         AMP_STRAFE_DIAG, AMP_STRAFE_LAT,  AMP_STRAFE_DIAG,   // D_DER, M_DER, P_DER
-        // B back (patas que recuperan)
-         AMP_STRAFE_DIAG, -AMP_STRAFE_LAT,  AMP_STRAFE_DIAG,
-        -AMP_STRAFE_DIAG, -AMP_STRAFE_LAT, -AMP_STRAFE_DIAG);
-}
-
-// RIGHT (strafe derecha): espejo de LEFT
-static void caminar_right(void) {
-    set_accion("STRAFE: DER");
-    caminar_amp(4,
-        // A fwd
-         AMP_STRAFE_DIAG, -AMP_STRAFE_LAT,  AMP_STRAFE_DIAG,
-        -AMP_STRAFE_DIAG, -AMP_STRAFE_LAT, -AMP_STRAFE_DIAG,
-        // B back
-        -AMP_STRAFE_DIAG, AMP_STRAFE_LAT, -AMP_STRAFE_DIAG,
-         AMP_STRAFE_DIAG, AMP_STRAFE_LAT,  AMP_STRAFE_DIAG);
-}
-
-// ─── Dispatcher ───
-static void caminar(int direccion) {
-    switch (direccion) {
-        case 1: caminar_go();    break;
-        case 2: caminar_back();  break;
-        case 4: caminar_right(); break;
-        case 5: caminar_left();  break;
-    }
-}
-
-// ─── Transición postura lenta (2 s) ───
 void transicion_postura(bool levantar) {
     en_transicion = true;
     set_accion(levantar ? "LEVANTANDO..." : "APAGANDO...");
@@ -3203,7 +4051,6 @@ void transicion_postura(bool levantar) {
     en_transicion = false;
 }
 
-// ─── Flexiones ───
 void flexiones(void) {
     en_transicion = true;
     set_accion("FLEXIONES");
@@ -3223,39 +4070,22 @@ void flexiones(void) {
     en_transicion = false;
 }
 
-// ─── Tarea principal con evasión ───
 void motion_task(void *pvParameters) {
+    hcsr04_init();
+
     while (1) {
         if (!en_transicion) {
             procesar_movimiento_suave();
         }
 
         if (robot_encendido && !en_transicion) {
-            bool hay_obstaculo = radar_fisicamente_encendido && gpio_get_level(PIN_RADAR);
-            TickType_t ahora = xTaskGetTickCount();
-
-            // Iniciar evasión
-            if (hay_obstaculo && (direccion_actual == 1 || direccion_actual == 2) && !modo_evasion) {
-                modo_evasion = true;
-                direccion_evasion = direccion_actual;
-                t_evasion_ini = ahora;
-                direccion_actual = 4;   // giro derecha (reusa strafe_right)
-                fase_marcha = 0;
-                set_accion("EVADIENDO: DER");
-                ESP_LOGI(TAG, "Obstáculo detectado, evadiendo a la derecha");
-            }
-
-            if (modo_evasion) {
-                uint32_t elapsed_ms = (ahora - t_evasion_ini) * portTICK_PERIOD_MS;
-                if ((elapsed_ms > 1500 && !hay_obstaculo) || elapsed_ms > 4000) {
-                    modo_evasion = false;
-                    direccion_actual = direccion_evasion;
-                    fase_marcha = 0;
-                    ESP_LOGI(TAG, "Retomando dirección original");
-                }
-            }
-
             if (!modo_calibracion) {
+                if (obstaculo_detectado() && direccion_actual != 0) {
+                    direccion_actual = 0;
+                    set_accion("OBSTACULO");
+                    ESP_LOGW(TAG, "Obstaculo detectado");
+                }
+
                 if (direccion_actual != direccion_anterior) {
                     fase_marcha = 0;
                     direccion_anterior = direccion_actual;
@@ -3267,7 +4097,7 @@ void motion_task(void *pvParameters) {
                     mover_tripode_a(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
                     mover_tripode_b(FEMUR_APOYO, COXA_CENTRO, COXA_CENTRO);
                     fase_marcha = 0;
-                    if (strcmp(accion_actual, "FRENO X OBSTACULO") != 0) {
+                    if (strcmp(get_accion(), "OBSTACULO") != 0) {
                         set_accion("ESTATICO");
                     }
                 }
@@ -3282,25 +4112,232 @@ void motion_task(void *pvParameters) {
 #pragma once
 #include <stdbool.h>
 
-// Estado global del robot
 extern bool robot_encendido;
 extern bool modo_automatico;
 extern bool modo_calibracion;
-extern bool radar_fisicamente_encendido;
 extern int  direccion_actual;
 extern int  velocidad_caminata;
-extern bool en_transicion;   // bloquea motion_task durante transicion_postura
+extern bool en_transicion;
 
-// Acción legible para pantalla / web (sustituye al String de Arduino)
 void set_accion(const char *texto);
 const char *get_accion(void);
 
-// Secuencias
 void transicion_postura(bool levantar);
 void flexiones(void);
 
-// Tarea
 void motion_task(void *pvParameters);
+#include "pantalla.h"
+#include "hardware.h"
+#include "motion.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "driver/i2c_master.h"
+#include "esp_log.h"
+#include "esp_rom_sys.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "u8g2.h"
+#include "aht20.h"
+#include "bmp280.h"
+
+static const char *TAG = "PANTALLA";
+
+#define PANTALLA_PERIODO_MS  500
+#define AHT20_ADDR           0x38
+#define BMP280_ADDR          0x76   // prueba 0x77 si no responde
+
+static u8g2_t u8g2;
+
+// ─────────────────────────────────────────────────────────────
+// Callback GPIO + delay para u8g2 (SW SPI en ESP-IDF)
+// ─────────────────────────────────────────────────────────────
+static uint8_t gpio_and_delay_esp32(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr)
+{
+    switch (msg) {
+        case U8X8_MSG_GPIO_AND_DELAY_INIT: {
+            gpio_config_t io_conf = {
+                .pin_bit_mask = (1ULL << PIN_LCD_CLK) | (1ULL << PIN_LCD_DATA) |
+                                (1ULL << PIN_LCD_CS)  | (1ULL << PIN_LCD_RST),
+                .mode         = GPIO_MODE_OUTPUT,
+                .pull_up_en   = GPIO_PULLUP_DISABLE,
+                .pull_down_en = GPIO_PULLDOWN_DISABLE,
+                .intr_type    = GPIO_INTR_DISABLE,
+            };
+            gpio_config(&io_conf);
+            gpio_set_level(PIN_LCD_CS, 1);
+            gpio_set_level(PIN_LCD_RST, 1);
+            break;
+        }
+        case U8X8_MSG_DELAY_NANO:
+            esp_rom_delay_us(1);
+            break;
+        case U8X8_MSG_DELAY_100NANO:
+            esp_rom_delay_us(1);
+            break;
+        case U8X8_MSG_DELAY_10MICRO:
+            esp_rom_delay_us(10);
+            break;
+        case U8X8_MSG_DELAY_MILLI:
+            vTaskDelay(pdMS_TO_TICKS(arg_int));
+            break;
+        case U8X8_MSG_GPIO_CS:
+            gpio_set_level(PIN_LCD_CS, arg_int);
+            break;
+        case U8X8_MSG_GPIO_RESET:
+            gpio_set_level(PIN_LCD_RST, arg_int);
+            break;
+        case U8X8_MSG_GPIO_SPI_CLOCK:
+            gpio_set_level(PIN_LCD_CLK, arg_int);
+            break;
+        case U8X8_MSG_GPIO_SPI_DATA:
+        case U8X8_MSG_GPIO_MOSI:
+            gpio_set_level(PIN_LCD_DATA, arg_int);
+            break;
+        default:
+            return 0;
+    }
+    return 1;
+}
+
+static const char *modo_texto(void)
+{
+    if (modo_calibracion) return "SERVOS";
+    return modo_automatico ? "AUTOMATICO" : "MANUAL";
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tarea de pantalla
+// ─────────────────────────────────────────────────────────────
+static void tarea_pantalla(void *pvParameters)
+{
+    // ─── Bus I2C propio de esta tarea (para sensores) ───
+    i2c_master_bus_handle_t bus = NULL;
+    i2c_master_bus_config_t bus_cfg = {
+        .clk_source        = I2C_CLK_SRC_DEFAULT,
+        .i2c_port          = I2C_NUM_0,
+        .scl_io_num        = PIN_SCL,
+        .sda_io_num        = PIN_SDA,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    if (i2c_new_master_bus(&bus_cfg, &bus) != ESP_OK) {
+        ESP_LOGE(TAG, "No se pudo crear el bus I2C");
+        bus = NULL;
+    }
+
+    // ─── AHT20 (temp + humedad) ───
+    aht20_dev_handle_t aht20_h = NULL;
+    if (bus) {
+        i2c_device_config_t cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address  = AHT20_ADDR,
+            .scl_speed_hz    = 400000,
+        };
+        i2c_master_dev_handle_t dev;
+        if (i2c_master_bus_add_device(bus, &cfg, &dev) == ESP_OK) {
+            aht20_init(&aht20_h, dev);
+            ESP_LOGI(TAG, "AHT20 OK");
+        }
+    }
+
+    // ─── BMP280 (presion) ───
+    bmp280_dev_handle_t bmp280_h = NULL;
+    if (bus) {
+        i2c_device_config_t cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address  = BMP280_ADDR,
+            .scl_speed_hz    = 400000,
+        };
+        i2c_master_dev_handle_t dev;
+        if (i2c_master_bus_add_device(bus, &cfg, &dev) == ESP_OK) {
+            bmp280_init(&bmp280_h, dev);
+            ESP_LOGI(TAG, "BMP280 OK");
+        }
+    }
+
+    char ant[5][24] = {0};
+
+    while (1) {
+        // 1) Leer sensores
+        float temp = 0.0f, hum = 0.0f, pres = 0.0f;
+        bool temp_ok = false;
+
+        if (aht20_h) {
+            if (aht20_get_sensor_data(aht20_h, &temp, &hum) == ESP_OK) {
+                temp_ok = true;
+            }
+        }
+        if (bmp280_h) {
+            bmp280_read_pressure(bmp280_h, &pres);
+        }
+
+        // 2) Formatear 5 lineas
+        char l[5][24];
+
+        if (temp_ok)
+            snprintf(l[0], sizeof(l[0]), "T:%.1fC H:%.0f%%", temp, hum);
+        else
+            snprintf(l[0], sizeof(l[0]), "T:--  H:--");
+
+        snprintf(l[1], sizeof(l[1]), "P:%.0fhPa", pres);
+        snprintf(l[2], sizeof(l[2]), "Modo: %s", modo_texto());
+        snprintf(l[3], sizeof(l[3]), "%.20s", get_accion());
+        snprintf(l[4], sizeof(l[4]), "%s",
+                 robot_encendido ? "ESTADO: DE PIE" : "ESTADO: APAGADO");
+
+        // 3) Redibujar solo si algo cambio
+        bool cambio = false;
+        for (int i = 0; i < 5; i++) {
+            if (strcmp(l[i], ant[i]) != 0) { cambio = true; break; }
+        }
+
+        if (cambio) {
+            u8g2_ClearBuffer(&u8g2);
+            u8g2_SetFont(&u8g2, u8g2_font_6x10_tf);
+
+            u8g2_DrawStr(&u8g2, 0, 10, l[0]);  // T + H
+            u8g2_DrawStr(&u8g2, 0, 22, l[1]);  // Presion
+            u8g2_DrawStr(&u8g2, 0, 34, l[2]);  // Modo
+            u8g2_DrawStr(&u8g2, 0, 46, l[3]);  // Accion
+            u8g2_DrawLine(&u8g2, 0, 51, 128, 51);
+            u8g2_DrawStr(&u8g2, 0, 62, l[4]);  // Estado
+
+            u8g2_SendBuffer(&u8g2);
+            memcpy(ant, l, sizeof(ant));
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(PANTALLA_PERIODO_MS));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Inicializacion
+// ─────────────────────────────────────────────────────────────
+void pantalla_iniciar(void)
+{
+    u8g2_Setup_st7920_s_128x64_f(&u8g2, U8G2_R0,
+                                 u8x8_byte_st7920_sw_spi,
+                                 gpio_and_delay_esp32);
+    u8g2_InitDisplay(&u8g2);
+    u8g2_SetPowerSave(&u8g2, 0);
+    u8g2_ClearBuffer(&u8g2);
+    u8g2_SendBuffer(&u8g2);
+
+    ESP_LOGI(TAG, "LCD ST7920 iniciado (CLK=%d DATA=%d CS=%d RST=%d)",
+             PIN_LCD_CLK, PIN_LCD_DATA, PIN_LCD_CS, PIN_LCD_RST);
+
+    xTaskCreatePinnedToCore(tarea_pantalla, "Pantalla", 4096, NULL, 4, NULL, 0);
+}
+#pragma once
+
+// Inicia LCD ST7920 128x64, AHT20 y BMP280.
+// Crea la tarea que refresca la pantalla con:
+//  Temperatura, Humedad, Presion, Modo, Accion y Estado.
+void pantalla_iniciar(void);
 #include "voice.h"
 #include "motion.h"
 #include "hardware.h"
@@ -3322,7 +4359,6 @@ void motion_task(void *pvParameters);
 
 static const char *TAG = "VOICE";
 
-// Pines del micrófono PDM en la FireBeetle 2 ESP32-P4
 #define PDM_CLK_PIN   12
 #define PDM_DATA_PIN  9
 
@@ -3339,204 +4375,162 @@ static TickType_t tiempo_ultimo_id = 0;
 #define DEBOUNCE_MS 800
 
 static void aplicar_comando_voz(int id) {
-	TickType_t ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
-	if (id == ultimo_id && (ahora - tiempo_ultimo_id) < DEBOUNCE_MS) return;
-	ultimo_id = id;
-	tiempo_ultimo_id = ahora;
+    TickType_t ahora = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (id == ultimo_id && (ahora - tiempo_ultimo_id) < DEBOUNCE_MS) return;
+    ultimo_id = id;
+    tiempo_ultimo_id = ahora;
 
-	ESP_LOGI(TAG, "Comando de voz detectado: id=%d", id);
+    ESP_LOGI(TAG, "Comando de voz detectado: id=%d", id);
 
-	switch (id) {
-		case 0: // "go"
-			if (!modo_automatico && robot_encendido && !modo_calibracion) {
-				if (radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-					direccion_actual = 0;
-					set_accion("FRENO X OBSTACULO");
-				} else {
-					direccion_actual = 1;   // forward
-				}
-			}
-			break;
-		case 1: // "back"
-			if (!modo_automatico && robot_encendido && !modo_calibracion) {
-				if (radar_fisicamente_encendido && gpio_get_level(PIN_RADAR)) {
-					direccion_actual = 0;
-					set_accion("FRENO X OBSTACULO");
-				} else {
-					direccion_actual = 2;   // backward
-				}
-			}
-			break;
-		case 2: // "left"
-			if (!modo_automatico && robot_encendido && !modo_calibracion)
-				direccion_actual = 3;   // strafe left
-			break;
-		case 3: // "right"
-			if (!modo_automatico && robot_encendido && !modo_calibracion)
-				direccion_actual = 4;   // strafe right
-			break;
-		case 4: // "jump"
-			if (robot_encendido && !modo_automatico && !modo_calibracion)
-				flexiones();
-			break;
-		case 5: // "power"
-			transicion_postura(!robot_encendido);
-			if (!robot_encendido) {
-				direccion_actual = 0;
-				modo_calibracion = false;
-			}
-			break;
-	}
+    switch (id) {
+        case 0: // go
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 2;
+            }
+            break;
+        case 1: // back
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 1;
+            }
+            break;
+        case 2: // left
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 4;
+            }
+            break;
+        case 3: // right
+            if (!modo_automatico && robot_encendido && !modo_calibracion) {
+                direccion_actual = 5;
+            }
+            break;
+        case 4: // jump
+            if (robot_encendido && !modo_automatico && !modo_calibracion)
+                flexiones();
+            break;
+        case 5: // power
+            transicion_postura(!robot_encendido);
+            if (!robot_encendido) {
+                direccion_actual = 0;
+                modo_calibracion = false;
+            }
+            break;
+    }
 }
 
 esp_err_t voice_init(void) {
-	// 1. Modelos desde la partición
-	srmodel_list_t *models = esp_srmodel_init("model");
-	if (!models) {
-		ESP_LOGE(TAG, "esp_srmodel_init falló");
-		return ESP_FAIL;
-	}
+    srmodel_list_t *models = esp_srmodel_init("model");
+    if (!models) {
+        ESP_LOGE(TAG, "esp_srmodel_init fallo");
+        return ESP_FAIL;
+    }
 
-	// 2. AFE: "M" = 1 micrófono (mono, sin referencia de playback)
-	afe_config_t *afe_config = afe_config_init("M", models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
-	if (!afe_config) {
-		ESP_LOGE(TAG, "afe_config_init falló");
-		return ESP_FAIL;
-	}
+    afe_config_t *afe_config = afe_config_init("M", models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
+    if (!afe_config) {
+        ESP_LOGE(TAG, "afe_config_init fallo");
+        return ESP_FAIL;
+    }
 
-	afe_handle = esp_afe_handle_from_config(afe_config);
-	if (!afe_handle) {
-		ESP_LOGE(TAG, "afe_handle falló");
-		return ESP_FAIL;
-	}
+    afe_handle = esp_afe_handle_from_config(afe_config);
+    if (!afe_handle) {
+        ESP_LOGE(TAG, "afe_handle fallo");
+        return ESP_FAIL;
+    }
 
-	afe_data = afe_handle->create_from_config(afe_config);
-	if (!afe_data) {
-		ESP_LOGE(TAG, "afe create falló");
-		return ESP_FAIL;
-	}
+    afe_data = afe_handle->create_from_config(afe_config);
+    if (!afe_data) {
+        ESP_LOGE(TAG, "afe create fallo");
+        return ESP_FAIL;
+    }
 
-	// 3. MultiNet
-	char *mn_name = esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_ENGLISH);
-	if (!mn_name) {
-		ESP_LOGE(TAG, "no MN inglés");
-		return ESP_FAIL;
-	}
-	ESP_LOGI(TAG, "Modelo MultiNet: %s", mn_name);
+    char *mn_name = esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_ENGLISH);
+    if (!mn_name) {
+        ESP_LOGE(TAG, "no MN ingles");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "Modelo MultiNet: %s", mn_name);
 
-	multinet = esp_mn_handle_from_name(mn_name);
-	if (!multinet) {
-		ESP_LOGE(TAG, "mn_handle falló");
-		return ESP_FAIL;
-	}
+    multinet = esp_mn_handle_from_name(mn_name);
+    if (!multinet) {
+        ESP_LOGE(TAG, "mn_handle fallo");
+        return ESP_FAIL;
+    }
 
-	mn_data = multinet->create(mn_name, 5760);
-	if (!mn_data) {
-		ESP_LOGE(TAG, "mn create falló");
-		return ESP_FAIL;
-	}
+    mn_data = multinet->create(mn_name, 5760);
+    if (!mn_data) {
+        ESP_LOGE(TAG, "mn create fallo");
+        return ESP_FAIL;
+    }
 
-	// 4. Comandos
-	esp_mn_commands_clear();
-	esp_mn_commands_add(0, "go");
-	esp_mn_commands_add(1, "back");
-	esp_mn_commands_add(2, "left");
-	esp_mn_commands_add(3, "right");
-	esp_mn_commands_add(4, "jump");
-	esp_mn_commands_add(5, "power");
-	esp_mn_commands_update();
+    esp_mn_commands_clear();
+    esp_mn_commands_add(0, "go");
+    esp_mn_commands_add(1, "back");
+    esp_mn_commands_add(2, "left");
+    esp_mn_commands_add(3, "right");
+    esp_mn_commands_add(4, "jump");
+    esp_mn_commands_add(5, "power");
+    esp_mn_commands_update();
 
-	// 5. I2S PDM RX (micrófono de la FireBeetle 2)
-	i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
-	ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &rx_handle));
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, NULL, &rx_handle));
 
-	i2s_pdm_rx_config_t pdm_cfg = {
-		.clk_cfg  = I2S_PDM_RX_CLK_DEFAULT_CONFIG(16000),
-		.slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
-		.gpio_cfg = {
-			.clk = PDM_CLK_PIN,
-			.din = PDM_DATA_PIN,
-		},
-	};
-	ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(rx_handle, &pdm_cfg));
-	ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
+    i2s_pdm_rx_config_t pdm_cfg = {
+        .clk_cfg  = I2S_PDM_RX_CLK_DEFAULT_CONFIG(16000),
+        .slot_cfg = I2S_PDM_RX_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .clk = PDM_CLK_PIN,
+            .din = PDM_DATA_PIN,
+        },
+    };
+    ESP_ERROR_CHECK(i2s_channel_init_pdm_rx_mode(rx_handle, &pdm_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(rx_handle));
 
-	voice_ready = true;
-	ESP_LOGI(TAG, "ESP-SR inicializado (micrófono PDM GPIO12/9, mono)");
-	return ESP_OK;
+    voice_ready = true;
+    ESP_LOGI(TAG, "ESP-SR inicializado (PDM GPIO12/9)");
+    return ESP_OK;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Tarea unificada: lee I2S → feed → fetch → detect
-// ─────────────────────────────────────────────────────────────
 void mic_feed_task(void *pvParameters) {
-	if (!voice_ready || !rx_handle) {
-		vTaskDelete(NULL);
-		return;
-	}
+    if (!voice_ready || !rx_handle) {
+        vTaskDelete(NULL);
+        return;
+    }
 
-	int chunksize = afe_handle->get_feed_chunksize(afe_data);
-	size_t size   = (size_t)chunksize * sizeof(int16_t);
+    int chunksize = afe_handle->get_feed_chunksize(afe_data);
+    size_t size   = (size_t)chunksize * sizeof(int16_t);
 
-	int16_t *buffer = malloc(size);
-	if (!buffer) {
-		vTaskDelete(NULL);
-		return;
-	}
+    int16_t *buffer = malloc(size);
+    if (!buffer) {
+        vTaskDelete(NULL);
+        return;
+    }
 
-	ESP_LOGI(TAG, "mic_feed_task (chunk=%d, bytes=%u)", chunksize, (unsigned)size);
+    ESP_LOGI(TAG, "mic_feed_task (chunk=%d)", chunksize);
 
-	// Para no inundar el log, imprimimos el peak cada N ciclos
-	int contador_peak = 0;
-	int peak_max = 0;
+    while (1) {
+        size_t bytes_read = 0;
+        esp_err_t ret = i2s_channel_read(rx_handle, buffer, size, &bytes_read, portMAX_DELAY);
+        if (ret != ESP_OK || bytes_read == 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
 
-	while (1) {
-		size_t bytes_read = 0;
-		esp_err_t ret = i2s_channel_read(rx_handle, buffer, size, &bytes_read, portMAX_DELAY);
-		if (ret != ESP_OK || bytes_read == 0) {
-			vTaskDelay(pdMS_TO_TICKS(10));
-			continue;
-		}
+        afe_handle->feed(afe_data, buffer);
 
-		// ── Diagnóstico: calcular peak del buffer de audio ──
-		int peak = 0;
-		int muestras = bytes_read / sizeof(int16_t);
-		for (int i = 0; i < muestras; i++) {
-			int v = buffer[i];
-			if (v < 0) v = -v;
-			if (v > peak) peak = v;
-		}
-		if (peak > peak_max) peak_max = peak;
-		contador_peak++;
-		if (contador_peak >= 50) {  // ~cada 1 segundo (50 chunks × 20ms)
-			ESP_LOGI(TAG, "audio peak (1s) = %d", peak_max);
-			contador_peak = 0;
-			peak_max = 0;
-		}
+        afe_fetch_result_t *res = afe_handle->fetch(afe_data);
+        if (!res || res->ret_value == ESP_FAIL) continue;
 
-		// 1. Alimentar el AFE
-		afe_handle->feed(afe_data, buffer);
+        if (res->wakeup_state == WAKENET_DETECTED) {
+            ESP_LOGI(TAG, ">>> WAKE WORD <<<");
+        }
 
-		// 2. Extraer el resultado inmediatamente
-		afe_fetch_result_t *res = afe_handle->fetch(afe_data);
-		if (!res || res->ret_value == ESP_FAIL) {
-			continue;
-		}
-
-		// ── Diagnóstico: log de wake word ──
-		if (res->wakeup_state == WAKENET_DETECTED) {
-			ESP_LOGI(TAG, ">>> WAKE WORD DETECTADA <<<");
-		}
-
-		// 3. Pasar al MultiNet
-		esp_mn_state_t state = multinet->detect(mn_data, res->data);
-		if (state == ESP_MN_STATE_DETECTED) {
-			esp_mn_results_t *r = multinet->get_results(mn_data);
-			if (r && r->num > 0) {
-				aplicar_comando_voz(r->phrase_id[0]);
-			}
-		}
-	}
+        esp_mn_state_t state = multinet->detect(mn_data, res->data);
+        if (state == ESP_MN_STATE_DETECTED) {
+            esp_mn_results_t *r = multinet->get_results(mn_data);
+            if (r && r->num > 0) {
+                aplicar_comando_voz(r->phrase_id[0]);
+            }
+        }
+    }
 }
 #pragma once
 #include "esp_err.h"

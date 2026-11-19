@@ -21,7 +21,6 @@ static i2c_master_dev_handle_t pca_dev = NULL;
 float ang_actual[12];
 int   ang_objetivo[12];
 
-#define INTERVALO_SUAVIZADO_MS 15
 #define VEL_SUAVIZADO_COXA     1.5f
 #define VEL_SUAVIZADO_FEMUR    4.0f
 
@@ -104,28 +103,7 @@ void mover_tripode_b(int femur, int coxa_izq, int coxa_der) {
 }
 
 esp_err_t hardware_init(void) {
-    // Radar: solo INPUT (la resistencia pull-down externa ya está en el módulo)
-    gpio_config_t radar_cfg = {
-        .pin_bit_mask = (1ULL << PIN_RADAR),
-        .mode         = GPIO_MODE_INPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&radar_cfg);
-
-    // CDS: solo OUTPUT (alimenta el radar)
-    gpio_config_t cds_cfg = {
-        .pin_bit_mask = (1ULL << PIN_CDS),
-        .mode         = GPIO_MODE_OUTPUT,
-        .pull_up_en   = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type    = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&cds_cfg);
-    gpio_set_level(PIN_CDS, 1);
-
-    // I2C para PCA9685
+    // I2C para PCA9685 (y compartido con sensores)
     i2c_master_bus_config_t bus_cfg = {
         .clk_source        = I2C_CLK_SRC_DEFAULT,
         .i2c_port          = I2C_NUM_0,
@@ -151,6 +129,11 @@ esp_err_t hardware_init(void) {
         mover_servo_inmediato(i, a);
     }
 
-    ESP_LOGI(TAG, "Hardware listo (PCA9685 en 0x40, I2C 7/8, radar en GPIO5)");
+    ESP_LOGI(TAG, "Hardware listo (PCA9685 0x40, I2C 7/8)");
     return ESP_OK;
+}
+
+// ─── NUEVO: acceso al bus I2C para sensores ───
+i2c_master_bus_handle_t hardware_get_i2c_bus(void) {
+    return i2c_bus;
 }

@@ -16,7 +16,6 @@ if("${CONFIG}" STREQUAL "" OR "${CONFIG}" STREQUAL "")
   "flasher_args.json"
   "hexapod_idf.bin"
   "hexapod_idf.map"
-  "ldgen_fragments"
   "ldgen_libraries"
   "ldgen_libraries.in"
   "project_elf_src_esp32p4.c"

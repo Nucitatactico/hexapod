@@ -4,6 +4,6 @@
 
 method=source_dir
 command=
-source_dir=/home/nucita/esp/esp-idf/components/bootloader/subproject
+source_dir=/home/optiserver/esp/esp-idf/components/bootloader/subproject
 work_dir=
 

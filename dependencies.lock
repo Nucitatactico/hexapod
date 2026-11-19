@@ -20,7 +20,7 @@ dependencies:
       type: service
     version: 0.8.0
   espressif/esp-dl:
-    component_hash: bec531351a359de9f49f7bad90038e5328a24d004da56d0a27731f9448ce7af8
+    component_hash: 3148b2692a2943d7e35401dc10a181b6ba83515ec70ef51499ac5d2593eef3e2
     dependencies:
     - name: espressif/dl_fft
       registry_url: https://components.espressif.com
@@ -46,9 +46,9 @@ dependencies:
     - esp32s2
     - esp32s3
     - esp32s31
-    version: 3.3.15
+    version: 3.3.13
   espressif/esp-sr:
-    component_hash: 7ba1e97d446440faa96a7d98fbda7dbaaf7ae6b960e06cc68264d38aa6eb4d14
+    component_hash: 31c301aa50346158c85271b149a6c7473dfdf3edaa0958968f9cdfe06d4dcd45
     dependencies:
     - name: espressif/cjson
       registry_url: https://components.espressif.com
@@ -61,7 +61,7 @@ dependencies:
     - name: espressif/esp-dl
       registry_url: https://components.espressif.com
       require: private
-      version: ~3.3.12
+      version: 3.3.13
     - name: espressif/esp-dsp
       registry_url: https://components.espressif.com
       require: private
@@ -74,7 +74,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 2.6.1
+    version: 2.6.2
   espressif/esp_new_jpeg:
     component_hash: e1e7e6991193c41ed6c9fc386702aa7821433319e7aa9c3147cd3236310cd69c
     dependencies: []
@@ -97,10 +97,21 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.4.4
+    version: 5.5.0
+  lutzbellmann/esp32_aht20_bmp280:
+    component_hash: 7c32e50b9c7c04e909ab5c0dab8c26bd36dd25b77b27b6bb5f185e5430b55c74
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.2.2
 direct_dependencies:
 - espressif/esp-sr
 - idf
-manifest_hash: ffda4afc3dde8469571c45e25d651b0438ebd6951722833a97644e9f300d3566
+- lutzbellmann/esp32_aht20_bmp280
+manifest_hash: e627b9ace312291dbd17d440179b5bc7e9f20a3d5383cadbb446028a28fc27ec
 target: esp32p4
 version: 2.0.0

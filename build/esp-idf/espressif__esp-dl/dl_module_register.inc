@@ -2,9 +2,6 @@
 #if DL_COMPILE_ALL || defined(DL_OP_Add)
 register_module("Add", Add::deserialize);
 #endif
-#if DL_COMPILE_ALL || defined(DL_OP_Attention)
-register_module("Attention", Attention::deserialize);
-#endif
 #if DL_COMPILE_ALL || defined(DL_OP_AveragePool)
 register_module("AveragePool", AveragePool::deserialize);
 #endif
@@ -70,9 +67,6 @@ register_module("Identity", Identity::deserialize);
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_InsertZeros)
 register_module("InsertZeros", InsertZeros::deserialize);
-#endif
-#if DL_COMPILE_ALL || defined(DL_OP_InverseSigmoid)
-register_module("InverseSigmoid", InverseSigmoid::deserialize);
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_LSTM)
 register_module("LSTM", LSTM::deserialize);
@@ -176,9 +170,6 @@ register_module("Resize", Resize::deserialize);
 #if DL_COMPILE_ALL || defined(DL_OP_ReverseSequence)
 register_module("ReverseSequence", ReverseSequence::deserialize);
 #endif
-#if DL_COMPILE_ALL || defined(DL_OP_RotaryEmbedding)
-register_module("RotaryEmbedding", RotaryEmbedding::deserialize);
-#endif
 #if DL_COMPILE_ALL || defined(DL_OP_ScatterND)
 register_module("ScatterND", ScatterND::deserialize);
 #endif
@@ -214,9 +205,6 @@ register_module("Swish", Swish::deserialize);
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_Tanh)
 register_module("Tanh", Tanh::deserialize);
-#endif
-#if DL_COMPILE_ALL || defined(DL_OP_TopK)
-register_module("TopK", TopK::deserialize);
 #endif
 #if DL_COMPILE_ALL || defined(DL_OP_Transpose)
 register_module("Transpose", Transpose::deserialize);

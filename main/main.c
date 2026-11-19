@@ -4,8 +4,10 @@
 #include "freertos/task.h"
 
 #include "hardware.h"
+#include "cam_link.h"
 #include "motion.h"
 #include "voice.h"
+#include "pantalla.h"
 
 static const char *TAG = "MAIN";
 
@@ -29,6 +31,8 @@ void app_main(void)
     }
 
     xTaskCreatePinnedToCore(motion_task, "motion", 4096, NULL, 5, NULL, 0);
+
+    pantalla_iniciar();
 
     ESP_LOGI(TAG, "Sistema listo.");
 }
